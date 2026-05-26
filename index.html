@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>極簡上海日誌 Shanghai Planner Pro</title>
+  
+  <!-- Vue 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Leaflet Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            jp: {
+              cream: '#FAF6EE', 
+              yellow: '#F3E5C8', 
+              accent: '#D4A373',
+              dark: '#4A443F', 
+              light: '#8C8279', 
+              softGreen: '#A3B19B', 
+              softRed: '#D6A299',
+              sand: '#E6DFD3'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+      background-color: #FAF6EE; 
+      color: #4A443F; 
+    }
+    #map { 
+      height: 260px; 
+      border-radius: 24px; 
+      z-index: 10; 
+      width: 100%; 
+      border: 1px solid #E6DFD3; 
+    }
+    .slide-up-enter-active, .slide-up-leave-active { transition: all 0.3s ease; }
+    .slide-up-enter-from, .slide-up-leave-to { transform: translateY(20px); opacity: 0; }
+    .fade-in { animation: fadeIn 0.25s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  </style>
+</head>
+<body class="flex justify-center min-h-screen bg-stone-100">
+
+  <div id="app" class="relative w-full max-w-md bg-jp-cream min-h-screen flex flex-col shadow-2xl overflow-hidden border border-stone-200/50">
+    
+    <!-- Custom Toast Notification -->
+    <transition name="slide-up">
+      <div v-if="toast.show" 
+           :class="[
+             'fixed top-4 left-1/2 -translate-x-1/2 z-[999] px-4 py-3 rounded-2xl shadow-lg text-xs font-semibold flex items-center gap-2 transition-all max-w-[90%]',
+             toast.type === 'success' ? 'bg-emerald-600 text-white' : 
+             toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-jp-dark text-white'
+           ]">
+        <svg v-if="toast.type === 'success'" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <svg v-else-if="toast.type === 'error'" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        <svg v-else class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span>{{ toast.message }}</span>
+      </div>
+    </transition>
+
+    <!-- Cloud Sync Dialog / Dashboard Modal -->
+    <div v-if="showCloudDashboard" class="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6">
+      <div class="bg-white w-full rounded-3xl p-6 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+        <div class="flex items-center justify-between border-b pb-3 border-stone-100">
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path>
+            </svg>
+            <h3 class="font-bold text-jp-dark text-sm">雲端 & Google 試算表整合控制台</h3>
+          </div>
+          <button @click="showCloudDashboard = false" class="p-1 hover:bg-stone-100 rounded-full transition-colors">
+            <svg class="w-4 h-4 text-stone-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+
+        <!-- Google Apps Script Real Connection Panel -->
+        <div class="p-4 bg-jp-cream/50 rounded-2xl border border-jp-yellow space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] text-jp-accent font-bold tracking-wider flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Google Sheets 連線設定
+            </span>
+            <span v-if="appsScriptUrl" class="text-[8px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">已設定連線</span>
+            <span v-else class="text-[8px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">單機運作中</span>
+          </div>
+
+          <div class="space-y-1">
+            <label class="text-[10px] text-stone-400 font-bold block">Google Apps Script Web App URL</label>
+            <input v-model="appsScriptUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" 
+                   class="w-full text-[11px] px-3 py-2 rounded-xl bg-white border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent">
+          </div>
+
+          <div class="flex items-center justify-between pt-1">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" v-model="autoSyncToGas" class="rounded text-jp-accent border-stone-300">
+              <span class="text-[10px] text-stone-500 font-bold">變更時自動同步備份至雲端試算表</span>
+            </label>
+          </div>
+
+          <!-- GAS Operations -->
+          <div class="grid grid-cols-2 gap-2 pt-1.5">
+            <button @click="syncToGoogleSheet" :disabled="gasLoading || !appsScriptUrl"
+                    class="py-2.5 bg-jp-accent hover:bg-jp-accent/90 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50">
+              <svg class="w-3.5 h-3.5" :class="{'animate-spin': gasLoading}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+              手動上傳同步
+            </button>
+            <button @click="loadFromGoogleSheet" :disabled="gasLoading || !appsScriptUrl"
+                    class="py-2.5 bg-jp-dark hover:bg-black text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50">
+              <svg class="w-3.5 h-3.5" :class="{'animate-spin': gasLoading}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+              自雲端讀取還原
+            </button>
+          </div>
+          <div class="text-[9px] text-emerald-700 bg-emerald-50 p-2 rounded-xl border border-emerald-100 leading-tight">
+            ⚡ <b>已開啟智慧背景同步</b>：每當您修改行程、記帳明細、必買清單，系統皆會在 1.5 秒後於背景安靜地備份至試算表中。
+          </div>
+        </div>
+
+        <!-- How to Deploy Google Apps Script Guide -->
+        <div class="p-4 bg-stone-50 rounded-2xl border border-stone-200/60 space-y-2">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-stone-700">
+            <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            如何取得並部署 Apps Script 網址？
+          </div>
+          <ol class="text-[9px] text-stone-500 list-decimal pl-4 space-y-1 leading-normal">
+            <li>在您的雲端硬碟中<b>建立一個 Google 試算表</b>。</li>
+            <li>點擊上方選單的 <b>「擴充功能」 &gt; 「Apps Script」</b>。</li>
+            <li>建立程式碼，將資料轉為 JSON 格式儲存至試算表內。</li>
+            <li>點擊右上角 <b>「部署」 &gt; 「新增部署」</b>。</li>
+            <li>類型選擇「網頁應用程式」，將「誰可以存取」設為<b>「任何人 (Anyone)」</b>。</li>
+            <li>部署完成後複製「網頁應用程式網址」並貼入上方輸入框中即可！</li>
+          </ol>
+        </div>
+
+        <!-- URL Shareable Cloud Link Section (REAL FUNCTIONALITY) -->
+        <div class="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100 space-y-2.5">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
+            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 10.742l1.99 1.137m0 0l1.99-1.137m-1.99 1.137V16.75M2 12a10 10 0 1120 0 10 10 0 01-20 0z"></path></svg>
+            生成網址免登入壓縮分享連結
+          </div>
+          <p class="text-[9px] text-stone-500 leading-tight">
+            不需連接 Google 雲端！直接將整套「行程 + 行前準備 + 必買 + 記帳」打包成一串網址。任何人點開即能瞬間還原你的行程。
+          </p>
+          <button @click="generateShareLink" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 10.742l1.99 1.137m0 0l1.99-1.137m-1.99 1.137V16.75M2 12a10 10 0 1120 0 10 10 0 01-20 0z"></path></svg>
+            產生並複製分享網址
+          </button>
+        </div>
+
+        <button @click="showCloudDashboard = false" class="w-full py-2.5 bg-stone-100 rounded-xl text-xs font-bold text-stone-500">關閉面板</button>
+      </div>
+    </div>
+
+    <!-- Header -->
+    <header class="sticky top-0 z-40 bg-jp-cream/90 backdrop-blur-md border-b border-jp-sand/60 px-5 py-4 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <div class="p-1.5 bg-jp-yellow rounded-xl text-jp-accent">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+        </div>
+        <div>
+          <!-- 行程標題點選可原地快速修改 -->
+          <input v-model="tripTitle" @change="saveToLocalStorage" class="text-lg font-bold text-jp-dark tracking-wide bg-transparent border-none p-0 focus:ring-0 w-44 font-sans focus:bg-white/80 rounded px-1" />
+          <p class="text-[10px] text-jp-light font-medium">上海．智慧旅程助手 Pro</p>
+        </div>
+      </div>
+      
+      <div class="flex items-center space-x-1.5">
+        <!-- 雲端同步按鈕與狀態指示器 -->
+        <button @click="showCloudDashboard = true" class="p-2 hover:bg-jp-yellow rounded-full transition-all relative" title="雲端備份與試算表同步控制台">
+          <svg class="w-5 h-5 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>
+          <span :class="['absolute top-1 right-1 w-2.5 h-2.5 border border-white rounded-full transition-colors', appsScriptUrl ? 'bg-emerald-500' : 'bg-stone-300']"></span>
+        </button>
+
+        <button @click="exportData" class="p-2 hover:bg-jp-yellow rounded-full transition-all text-jp-dark" title="導出本機 JSON">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+        </button>
+        <label class="p-2 hover:bg-jp-yellow rounded-full transition-all cursor-pointer text-jp-dark" title="導入本機 JSON">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+          <input type="file" @change="importData" class="hidden" accept=".json">
+        </label>
+        <button @click="currentTab = 'shopping'" class="p-2 hover:bg-jp-yellow rounded-full relative transition-all text-jp-dark" title="必買清單">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+          <span v-if="shoppingList.length > 0" class="absolute top-0 right-0 bg-jp-softRed text-white text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold">{{ shoppingList.length }}</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- AI 智慧行程讀取欄 -->
+    <div class="px-4 py-3 bg-jp-yellow/40 border-b border-jp-yellow/60 relative">
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5 text-[10px] font-bold text-jp-accent">
+            <svg class="w-3.5 h-3.5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
+            Gemini AI 快速排程與智慧避雷
+          </div>
+          <span v-if="aiLoading" class="text-[9px] text-jp-accent flex items-center gap-1">
+            <svg class="animate-spin h-3 w-3 text-jp-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            AI 辨識中...
+          </span>
+        </div>
+        <div class="flex gap-2">
+          <input v-model="aiInput" type="text" 
+                 :disabled="aiLoading"
+                 placeholder="例: 下午2點半去外灘拍東方明珠" 
+                 @keyup.enter="parseAI"
+                 class="flex-1 text-xs px-3 py-2.5 rounded-xl border-none bg-white/80 focus:ring-1 focus:ring-jp-accent focus:outline-none disabled:opacity-50 font-medium">
+          <button @click="parseAI" 
+                  :disabled="aiLoading"
+                  class="bg-jp-accent hover:bg-jp-accent/90 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1 disabled:opacity-50">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+            辨識
+          </button>
+        </div>
+        <div class="text-[9px] text-stone-500 leading-tight flex items-start gap-1">
+          <span>💡</span> 
+          <span>輸入時間與地點，AI將自動規劃至 <b>Day {{ activeDay === 'todo' ? 1 : activeDay }}</b> 的行程中，並自動填寫精準定位與在地防坑攻略！</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 橫向日期與分類選單 -->
+    <nav class="bg-jp-cream px-4 py-2 border-b border-jp-sand/40 overflow-x-auto no-scrollbar flex items-center space-x-2 sticky top-[115px] z-30">
+      <button @click="activeDay = 'todo'" 
+              :class="activeDay === 'todo' ? 'bg-jp-accent text-white shadow-md' : 'bg-jp-sand/50 text-jp-dark'"
+              class="px-4 py-2 rounded-2xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+        行前準備
+      </button>
+      <button v-for="day in daysCount" :key="day" @click="activeDay = day" 
+              :class="activeDay === day ? 'bg-jp-accent text-white shadow-md' : 'bg-jp-sand/50 text-jp-dark'"
+              class="px-4 py-2 rounded-2xl text-xs font-semibold whitespace-nowrap transition-all">
+        Day {{ day }}
+      </button>
+      <button @click="addNewDay" class="p-2 bg-jp-yellow/50 text-jp-accent rounded-xl hover:bg-jp-yellow font-bold text-xs" title="新增一天">+</button>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-y-auto pb-24 px-4 pt-4">
+      
+      <!-- 行前準備 (TODO Section) -->
+      <section v-if="activeDay === 'todo'" class="space-y-4 fade-in">
+        <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-100">
+          <h2 class="font-bold text-jp-dark mb-4 flex items-center gap-2 text-sm">
+            <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+            必備清單 / 行前確認
+          </h2>
+          <div class="flex gap-2 mb-4">
+            <input v-model="newTodo" @keyup.enter="addTodo" type="text" placeholder="新增待辦事項 (例如：辦理台胞證...)" class="flex-1 text-xs px-3 py-2.5 rounded-xl bg-jp-cream border-none focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium">
+            <button @click="addTodo" class="bg-jp-accent text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-jp-accent/90 transition-all">新增</button>
+          </div>
+          <ul class="space-y-2">
+            <li v-for="(t, idx) in todos" :key="idx" class="flex items-center justify-between p-3 bg-jp-cream/30 rounded-xl hover:bg-jp-cream/50 transition-colors">
+              <label class="flex items-center gap-3 cursor-pointer flex-1">
+                <input type="checkbox" v-model="t.done" @change="saveToLocalStorage" class="w-4 h-4 rounded text-jp-accent border-stone-300 focus:ring-jp-accent">
+                <span :class="t.done ? 'line-through text-stone-400' : 'text-xs text-jp-dark font-medium'">{{ t.text }}</span>
+              </label>
+              <button @click="deleteTodo(idx)" class="text-stone-300 hover:text-red-400 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 行程模式 (Itinerary Section) -->
+      <section v-if="activeDay !== 'todo' && currentTab === 'itinerary'" class="space-y-4 fade-in">
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-stone-100">
+          <div class="flex justify-between items-center mb-3 px-1">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-jp-accent animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+              <span class="text-xs font-bold text-jp-dark">Day {{ activeDay }} 上海天氣與地圖概況</span>
+            </div>
+            <span class="text-[10px] text-jp-accent font-bold bg-jp-yellow px-2 py-0.5 rounded-full">24°C 舒適晴天</span>
+          </div>
+          
+          <!-- Leaflet Map Container -->
+          <div id="map"></div>
+        </div>
+
+        <!-- 經典景點快捷新增 (Quick Templates Slider) -->
+        <div class="bg-jp-yellow/20 rounded-3xl p-4 border border-jp-yellow/60">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-jp-dark mb-2.5">
+            <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            上海經典景點一鍵加入 Day {{ activeDay }}
+          </div>
+          <div class="flex gap-2.5 overflow-x-auto no-scrollbar pb-1">
+            <button v-for="spot in iconicSpots" :key="spot.title" @click="addIconicSpot(spot)" 
+                    class="bg-white hover:bg-jp-yellow/50 transition-all border border-stone-100 rounded-2xl p-2.5 shrink-0 flex flex-col justify-between w-28 text-left shadow-sm">
+              <div>
+                <span class="text-[10px] bg-jp-accent/20 text-jp-accent font-extrabold px-1.5 py-0.5 rounded-md block w-max mb-1">{{ spot.category }}</span>
+                <span class="text-xs font-bold text-jp-dark line-clamp-1">{{ spot.title }}</span>
+              </div>
+              <span class="text-[8px] text-stone-500 mt-1 block leading-tight line-clamp-1">{{ spot.location }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Event Cards -->
+        <div class="space-y-4">
+          <div v-if="dailyEvents.length === 0" class="bg-white rounded-3xl p-8 text-center text-stone-400 text-xs border border-dashed border-stone-200">
+            <svg class="w-8 h-8 mx-auto mb-2 text-stone-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            當天尚未安排行程，可使用頂部 AI 快速辨識或手動新增行程！
+          </div>
+
+          <div v-for="(event, idx) in dailyEvents" :key="event.id" 
+               class="bg-white rounded-2xl p-4 shadow-sm border border-stone-100 relative group transition-all duration-200 hover:shadow-md">
+            <div class="flex justify-between items-start mb-2">
+              
+              <div class="flex items-center gap-2">
+                <!-- 小時與分鐘下拉式快速調整器 -->
+                <div v-if="editingTimeId === event.id" 
+                     class="flex items-center gap-1 bg-jp-yellow/80 border border-jp-accent/40 rounded-xl px-2 py-0.5 shadow-inner z-20 transition-all">
+                  <select v-model="tempHours" class="bg-transparent text-xs font-extrabold text-jp-dark focus:outline-none border-none p-0 cursor-pointer appearance-none">
+                    <option v-for="h in hoursList" :key="h" :value="h">{{ h }}</option>
+                  </select>
+                  <span class="text-xs text-jp-accent font-bold">:</span>
+                  <select v-model="tempMinutes" class="bg-transparent text-xs font-extrabold text-jp-dark focus:outline-none border-none p-0 cursor-pointer appearance-none">
+                    <option v-for="m in minutesList" :key="m" :value="m">{{ m }}</option>
+                  </select>
+                  <button @click="saveTimeEdit(event)" class="ml-1.5 p-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all" title="確定">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                  </button>
+                  <button @click="editingTimeId = null" class="p-1 bg-stone-300 hover:bg-stone-400 text-stone-700 rounded-lg transition-all" title="取消">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+                  </button>
+                </div>
+                
+                <!-- 預設顯示，點選可直接原地編輯時間 -->
+                <button v-else 
+                        @click="startEditingTime(event)" 
+                        class="flex items-center bg-jp-accent hover:bg-jp-accent/90 text-white rounded-xl px-2.5 py-1 text-[11px] font-bold gap-1 shadow-sm transition-all"
+                        title="點擊原地修改時間">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                  <span>{{ event.time }}</span>
+                </button>
+
+                <!-- 分類顏色標籤使用 getCatColor -->
+                <span :class="['text-[10px] font-bold px-2 py-0.5 rounded-lg', getCatColor(event.category)]">{{ event.category }}</span>
+              </div>
+
+              <div class="flex gap-1">
+                <button @click="moveEvent(idx, -1)" class="p-1 text-jp-light hover:text-jp-accent" title="上移">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                </button>
+                <button @click="moveEvent(idx, 1)" class="p-1 text-jp-light hover:text-jp-accent" title="下移">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <button @click="removeEvent(event.id)" class="p-1 text-stone-300 hover:text-red-400" title="刪除">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+              </div>
+            </div>
+
+            <h3 class="text-sm font-bold text-jp-dark mb-1">{{ event.title }}</h3>
+            <p class="text-[10px] text-stone-500 flex items-center gap-1 mb-2">
+              <svg class="w-3.5 h-3.5 text-jp-accent shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+              <span>{{ event.location }}</span>
+            </p>
+            
+            <!-- AI Suggested Notes -->
+            <div v-if="event.suggestedNotes" class="mt-2.5 p-3 bg-amber-50/60 border border-amber-100 rounded-xl relative">
+              <div class="flex items-center gap-1 text-[9px] font-bold text-amber-700 mb-1">
+                <svg class="w-3.5 h-3.5 text-amber-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
+                AI 避雷防坑指南
+              </div>
+              <p class="text-[10px] text-stone-600 leading-relaxed">{{ event.suggestedNotes }}</p>
+            </div>
+            
+            <div v-else class="mt-2 flex items-center justify-between">
+              <button @click="fetchSingleEventAISuggestion(event)" 
+                      :disabled="singleAiLoading === event.id"
+                      class="text-[9px] text-jp-accent font-bold flex items-center gap-1 hover:underline disabled:opacity-50">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                {{ singleAiLoading === event.id ? '建議生成中...' : '生成此地點的 AI 旅遊攻略' }}
+              </button>
+            </div>
+
+            <!-- User Personal Note -->
+            <textarea v-model="event.note" @change="saveToLocalStorage" placeholder="在此輸入個人心得或自由備註..." class="w-full mt-2.5 text-[10px] p-2 bg-jp-cream/50 rounded-xl border-none focus:ring-1 focus:ring-jp-accent resize-none focus:outline-none font-medium"></textarea>
+            
+            <div class="mt-3 flex justify-end">
+              <a :href="'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(event.location)" target="_blank" 
+                 class="flex items-center gap-1.5 bg-jp-dark text-white text-[9px] px-3 py-1.5 rounded-full hover:bg-black transition-colors font-bold">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                地圖搜尋導航
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <button @click="openEventModal" class="w-full py-4 border-2 border-dashed border-jp-accent/30 rounded-3xl text-jp-accent text-xs font-bold flex items-center justify-center gap-2 hover:bg-jp-yellow/20 transition-all">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          手動新增行程
+        </button>
+      </section>
+
+      <!-- 記帳與帳本分攤 (Billing Spreadsheet Section) -->
+      <section v-if="currentTab === 'billing'" class="space-y-4 fade-in">
+        <!-- Dashboard Card -->
+        <div class="bg-gradient-to-br from-jp-dark to-stone-800 text-white rounded-3xl p-5 shadow-lg relative overflow-hidden">
+          <div class="absolute right-0 top-0 translate-x-4 -translate-y-4 opacity-10">
+            <svg class="w-40 h-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+          </div>
+          
+          <div class="text-[10px] uppercase tracking-wider text-jp-yellow font-bold mb-2">旅程開銷與匯率面板</div>
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2 z-10">
+              <span class="text-sm font-bold bg-white/10 px-2.5 py-1 rounded-xl">¥ (CNY)</span>
+              <!-- 匯率輸入 -->
+              <input v-model="cnyExchangeRate" @change="saveToLocalStorage" type="number" step="any" inputmode="decimal" class="w-16 bg-white/20 border-none rounded-lg text-sm px-2 py-1 text-center font-bold focus:ring-1 focus:ring-jp-yellow focus:outline-none">
+              <svg class="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+              <span class="text-xs text-stone-300">台幣換算率 x {{ cnyExchangeRate }}</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 pt-3 border-t border-white/10">
+            <div>
+              <span class="text-[9px] text-stone-400 block mb-0.5">總花費人民幣</span>
+              <span class="text-lg font-black text-jp-yellow">¥ {{ filteredTotalCny }}</span>
+            </div>
+            <div class="text-right">
+              <span class="text-[9px] text-stone-400 block mb-0.5">整趟行程總台幣</span>
+              <span class="text-lg font-black text-emerald-400">NT$ {{ filteredTotalTwd }}</span>
+              <span class="text-[9px] text-stone-400 block">共 {{ bills.length }} 筆</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settlement Split Summary Dashboard (智慧結算分攤計算器) -->
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-stone-200/60 space-y-3">
+          <h3 class="text-xs font-bold text-jp-dark flex items-center gap-1.5 border-b pb-2 border-stone-100">
+            <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+            💡 旅伴分攤與智慧結算建議
+          </h3>
+          
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="p-2.5 bg-emerald-50 rounded-2xl border border-emerald-100">
+              <span class="text-[9px] text-emerald-800 font-bold block mb-0.5">我 付了</span>
+              <span class="text-xs font-black text-emerald-700">NT$ {{ payerTotals.meTwd }}</span>
+            </div>
+            <div class="p-2.5 bg-blue-50 rounded-2xl border border-blue-100">
+              <span class="text-[9px] text-blue-800 font-bold block mb-0.5">旅伴 付了</span>
+              <span class="text-xs font-black text-blue-700">NT$ {{ payerTotals.companionTwd }}</span>
+            </div>
+            <div class="p-2.5 bg-amber-50 rounded-2xl border border-amber-100">
+              <span class="text-[9px] text-amber-800 font-bold block mb-0.5">公積金 支出</span>
+              <span class="text-xs font-black text-amber-700">NT$ {{ payerTotals.kittyTwd }}</span>
+            </div>
+          </div>
+
+          <!-- Split Suggestion Verdict -->
+          <div class="p-3 bg-stone-50 rounded-2xl border border-stone-100 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2">
+              <span class="p-1 bg-jp-yellow text-jp-accent rounded-lg">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              </span>
+              <span class="text-[11px] text-stone-600 leading-tight">
+                <b>公攤花費結算：</b>兩人平均應分攤 <b class="text-stone-700">NT$ {{ splitSuggestion.averagePerPerson }}</b> 元。
+              </span>
+            </div>
+            <div class="text-right whitespace-nowrap pl-2">
+              <span class="text-[11px] font-black" :class="splitSuggestion.class">
+                {{ splitSuggestion.advice }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Master Spreadsheet Panel (全行程記帳明細且欄位重新對稱排列設計) -->
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-stone-100 overflow-hidden">
+          <div class="flex justify-between items-center gap-2.5 mb-4 border-b border-stone-100 pb-2.5">
+            <div class="flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+              <h2 class="text-xs font-bold text-jp-dark">全行程記帳明細 (Master Sheet)</h2>
+            </div>
+            <button @click="insertSpreadsheetRow" class="text-[9px] bg-jp-accent hover:bg-jp-accent/90 text-white px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all shadow-sm">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              插入一筆
+            </button>
+          </div>
+
+          <!-- 1. 手機專用版：美化後且高比例對稱的卡片清單模式 -->
+          <div class="space-y-3 md:hidden">
+            <div v-for="(bill, idx) in filteredBills" :key="bill.id" 
+                 class="bg-white border border-stone-200/80 rounded-2xl p-3 shadow-sm hover:border-jp-accent/40 hover:shadow-md transition-all flex flex-col gap-2.5 relative">
+              
+              <!-- 第一排：左側分類下拉標籤 + 右側一體化項目輸入 + 刪除鍵 -->
+              <div class="flex items-center gap-2">
+                <!-- 獨立手動分類選擇 -->
+                <div class="relative shrink-0">
+                  <select v-model="bill.category" @change="saveToLocalStorage"
+                          class="text-[9px] font-extrabold rounded-xl px-2.5 py-1.5 border-none focus:ring-0 cursor-pointer appearance-none text-center outline-none bg-opacity-90 select-none"
+                          :class="getCategoryBadgeClass(bill.category || '其他')">
+                    <option value="交通">交通</option>
+                    <option value="餐飲">餐飲</option>
+                    <option value="景點">景點</option>
+                    <option value="住宿">住宿</option>
+                    <option value="購物">購物</option>
+                    <option value="其他">其他</option>
+                  </select>
+                </div>
+                
+                <!-- 項目項目輸入與自動偵測 -->
+                <div class="flex-1 flex items-center bg-stone-50 border border-stone-100 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-jp-accent focus-within:bg-white transition-all h-8">
+                  <input type="text" v-model="bill.title" @input="onTitleInput(bill)" placeholder="項目名稱 (例: 小籠包、地鐵)..."
+                         class="w-full bg-transparent border-none px-2.5 py-1 text-xs font-bold text-jp-dark focus:ring-0 h-full placeholder:text-stone-300 focus:outline-none">
+                </div>
+
+                <!-- 刪除 -->
+                <button @click="removeBillRow(bill.id)" class="text-stone-300 hover:text-red-500 transition-colors p-1 shrink-0" title="刪除">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </button>
+              </div>
+
+              <!-- 第二排：付款人(w-1/3) + 人民幣(w-1/3) + 台幣自動換算卡(w-1/3) 三格精準對齊 -->
+              <div class="grid grid-cols-3 gap-2 bg-stone-50/50 p-2 rounded-xl border border-stone-100">
+                <!-- 付款人 -->
+                <div class="relative w-full">
+                  <select v-model="bill.payer" @change="saveToLocalStorage" 
+                          class="w-full text-center rounded-lg py-1 px-1.5 text-[10px] font-black cursor-pointer appearance-none border-none focus:ring-1 focus:ring-jp-accent h-7 bg-white shadow-sm"
+                          :class="getPayerClass(bill.payer)">
+                    <option value="我">我付</option>
+                    <option value="旅伴">旅伴付</option>
+                    <option value="公積金">公積金</option>
+                  </select>
+                  <div class="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-stone-500/80">
+                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </div>
+                </div>
+
+                <!-- 人民幣輸入 (花費) -->
+                <div class="flex items-center gap-1 bg-white border border-stone-200 rounded-lg px-2 py-0.5 h-7 shadow-sm justify-between">
+                  <span class="text-[9px] text-stone-400 font-bold select-none">¥</span>
+                  <input type="number" v-model="bill.amount" @change="saveToLocalStorage" step="any" inputmode="decimal" placeholder="0"
+                         class="w-full text-right bg-transparent border-none p-0 focus:ring-0 text-[11px] font-black text-jp-dark focus:outline-none">
+                </div>
+
+                <!-- 台幣顯示卡 -->
+                <div class="flex items-center justify-center bg-stone-100 border border-stone-200/40 rounded-lg h-7 text-[10px] font-semibold text-stone-500">
+                  <span class="text-[9px] text-stone-400 mr-0.5">NT$</span>
+                  <span class="text-jp-accent font-black">{{ ((parseFloat(bill.amount) || 0) * cnyExchangeRate).toFixed(0) }}</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- 2. 電腦/平板版：項目加寬、其他欄位縮小的 Excel/Notion 橫式明細 -->
+          <div class="hidden md:block overflow-x-auto border border-stone-200/60 rounded-xl">
+            <table class="w-full text-[11px] text-left border-collapse bg-white table-fixed min-w-[480px]">
+              <thead class="bg-jp-cream text-jp-dark font-extrabold border-b border-stone-200 select-none">
+                <tr>
+                  <th class="p-2 border-r border-stone-200/50 pl-3 w-auto">項目</th>
+                  <th class="p-2 border-r border-stone-200/50 text-center w-[70px]">分類</th>
+                  <th class="p-2 border-r border-stone-200/50 text-right w-[80px]">花費 (¥)</th>
+                  <th class="p-2 border-r border-stone-200/50 text-center w-[75px]">付款人</th>
+                  <th class="p-2 border-r border-stone-200/50 text-right w-[85px]">台幣 (NT$)</th>
+                  <th class="p-1 w-[35px] text-center"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(bill, idx) in filteredBills" :key="bill.id" class="hover:bg-jp-cream/20 transition-colors">
+                  
+                  <!-- 項目 -->
+                  <td class="p-1 border-b border-r border-stone-200/50 pl-2.5">
+                    <input type="text" v-model="bill.title" @input="onTitleInput(bill)" placeholder="請輸入項目名稱..."
+                           class="w-full bg-transparent border-none p-0.5 focus:bg-jp-yellow/30 focus:ring-0 text-[11px] font-bold text-jp-dark focus:outline-none placeholder:text-stone-300">
+                  </td>
+
+                  <!-- 分類 -->
+                  <td class="p-1 border-b border-r border-stone-200/50 text-center">
+                    <select v-model="bill.category" @change="saveToLocalStorage"
+                            class="text-[10px] font-extrabold rounded-lg w-full transition-all duration-300 py-0.5 px-1 border-none focus:ring-0 cursor-pointer appearance-none text-center outline-none bg-opacity-90 mx-auto select-none"
+                            :class="getCategoryBadgeClass(bill.category || '其他')">
+                      <option value="交通">交通</option>
+                      <option value="餐飲">餐飲</option>
+                      <option value="景點">景點</option>
+                      <option value="住宿">住宿</option>
+                      <option value="購物">購物</option>
+                      <option value="其他">其他</option>
+                    </select>
+                  </td>
+
+                  <!-- 花費 人民幣 -->
+                  <td class="p-1 border-b border-r border-stone-200/50 text-right pr-2">
+                    <div class="flex items-center justify-end gap-1 px-1 bg-stone-50/50 rounded-md">
+                      <span class="text-[9px] text-stone-300 select-none">¥</span>
+                      <input type="number" v-model="bill.amount" @change="saveToLocalStorage" step="any" inputmode="decimal" placeholder="0"
+                             class="w-full text-right bg-transparent border-none p-0 focus:ring-0 text-[11px] font-black text-jp-dark focus:outline-none">
+                    </div>
+                  </td>
+
+                  <!-- 付款人 -->
+                  <td class="p-1 border-b border-r border-stone-200/50 text-center">
+                    <select v-model="bill.payer" @change="saveToLocalStorage" 
+                            class="w-full text-center rounded-lg py-0.5 px-1 text-[10px] font-black cursor-pointer bg-stone-50 border-none focus:ring-0 focus:outline-none select-none"
+                            :class="getPayerClass(bill.payer)">
+                      <option value="我">我付</option>
+                      <option value="旅伴">旅伴付</option>
+                      <option value="公積金">公積金</option>
+                    </select>
+                  </td>
+
+                  <!-- 台幣 -->
+                  <td class="p-2 border-b border-r border-stone-200/50 text-right text-stone-500 font-extrabold pr-3 bg-stone-50/30 whitespace-nowrap select-none">
+                    <span class="text-[9px] text-stone-400 font-medium mr-0.5">NT$</span>
+                    <span class="text-jp-accent font-black">{{ ((parseFloat(bill.amount) || 0) * cnyExchangeRate).toFixed(0) }}</span>
+                  </td>
+
+                  <!-- 刪除按鍵 -->
+                  <td class="p-1 border-b text-center">
+                    <button @click="removeBillRow(bill.id)" class="text-stone-300 hover:text-red-500 transition-colors p-1" title="刪除項目">
+                      <svg class="w-3.5 h-3.5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 必買清單 (Shopping List Tab) -->
+      <section v-if="currentTab === 'shopping'" class="space-y-4 fade-in">
+        <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-100">
+          <h2 class="font-bold text-jp-dark mb-4 flex items-center gap-2 text-sm">
+            <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+            必買伴手禮與慾望清單
+          </h2>
+          <div class="flex gap-2 mb-4">
+            <input v-model="newShopItem.text" type="text" placeholder="品名 (例如: 大白兔奶糖...)" class="flex-[2] text-xs px-3 py-2.5 rounded-xl bg-jp-cream border-none focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium">
+            <input v-model="newShopItem.budget" type="number" placeholder="預算 ¥" class="flex-[1] text-xs px-2 py-2.5 rounded-xl bg-jp-cream border-none focus:outline-none focus:ring-1 focus:ring-jp-accent text-right font-bold">
+            <button @click="addShopItem" class="bg-jp-accent text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-jp-accent/90 transition-all">新增</button>
+          </div>
+          
+          <ul class="space-y-2">
+            <li v-for="(item, idx) in shoppingList" :key="idx" class="flex items-center justify-between p-3 bg-jp-cream/30 rounded-xl hover:bg-jp-cream/50 transition-colors">
+              <label class="flex items-center gap-3 cursor-pointer flex-1">
+                <input type="checkbox" v-model="item.done" @change="saveToLocalStorage" class="w-4 h-4 rounded text-jp-accent border-stone-300 focus:ring-jp-accent">
+                <span :class="item.done ? 'line-through text-stone-400' : 'text-xs text-jp-dark font-medium'">{{ item.text }}</span>
+              </label>
+              <div class="flex items-center gap-3">
+                <span v-if="item.budget" class="text-[10px] font-black text-jp-accent bg-jp-yellow px-2 py-0.5 rounded-md">¥ {{ item.budget }}</span>
+                <button @click="deleteShopItem(idx)" class="text-stone-300 hover:text-red-400 transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Modal: 新增行程彈窗 -->
+    <div v-if="showEventModal" class="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6">
+      <div class="bg-white w-full rounded-3xl p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between border-b pb-3 border-stone-100">
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <h3 class="font-bold text-jp-dark text-sm">手動新增行程</h3>
+          </div>
+          <button @click="showEventModal = false" class="p-1 hover:bg-stone-100 rounded-full transition-colors">
+            <svg class="w-4 h-4 text-stone-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="block font-bold text-stone-500 mb-1">造訪天數</label>
+            <select v-model.number="newEvent.day" class="w-full p-2.5 rounded-xl bg-jp-cream border-none focus:outline-none font-bold">
+              <option v-for="d in daysCount" :key="d" :value="d">Day {{ d }}</option>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-stone-500 mb-1">出發時間</label>
+              <input v-model="newEvent.time" type="time" class="w-full p-2 rounded-xl bg-jp-cream border-none focus:outline-none font-bold">
+            </div>
+            <div>
+              <label class="block font-bold text-stone-500 mb-1">分類標籤</label>
+              <select v-model="newEvent.category" class="w-full p-2.5 rounded-xl bg-jp-cream border-none focus:outline-none font-bold">
+                <option value="景點">景點</option>
+                <option value="餐飲">餐飲</option>
+                <option value="交通">交通</option>
+                <option value="住宿">住宿</option>
+                <option value="活動">活動</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-stone-500 mb-1">行程名稱 (景點或店家名稱)</label>
+            <input v-model="newEvent.title" type="text" placeholder="例：上海中心大廈" class="w-full p-2.5 rounded-xl bg-jp-cream border-none focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium">
+          </div>
+
+          <div>
+            <label class="block font-bold text-stone-500 mb-1">地址或詳細定位地點 (用於地圖)</label>
+            <input v-model="newEvent.location" type="text" placeholder="例：浦東新區陸家嘴環路479號" class="w-full p-2.5 rounded-xl bg-jp-cream border-none focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium">
+          </div>
+          
+          <div>
+            <label class="block font-bold text-stone-500 mb-1">個人自由備註 (選填)</label>
+            <textarea v-model="newEvent.note" placeholder="例：建議下午四點左右到看落日夕陽..." class="w-full p-2.5 rounded-xl bg-jp-cream border-none focus:outline-none focus:ring-1 focus:ring-jp-accent resize-none h-16 font-medium"></textarea>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 pt-3 border-t">
+          <button @click="showEventModal = false" class="py-2.5 bg-stone-100 rounded-xl text-xs font-bold text-stone-500">取消</button>
+          <button @click="saveNewEvent" class="py-2.5 bg-jp-accent hover:bg-jp-accent/90 text-white rounded-xl text-xs font-bold shadow-sm transition-all">新增儲存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating Bottom Navigation Bar (底部分類導航) -->
+    <nav class="absolute bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-jp-sand/60 px-6 py-3 flex justify-around items-center shadow-[0_-4px_24px_rgba(0,0,0,0.04)]">
+      <button @click="setTab('itinerary')" :class="currentTab === 'itinerary' && activeDay !== 'todo' ? 'text-jp-accent scale-105' : 'text-stone-400 hover:text-jp-dark'" class="flex flex-col items-center gap-1 transition-all">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+        <span class="text-[9px] font-bold">行程表</span>
+      </button>
+      <button @click="setTab('billing')" :class="currentTab === 'billing' ? 'text-jp-accent scale-105' : 'text-stone-400 hover:text-jp-dark'" class="flex flex-col items-center gap-1 transition-all">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+        <span class="text-[9px] font-bold">記帳 Ledger</span>
+      </button>
+      <button @click="setTab('shopping')" :class="currentTab === 'shopping' ? 'text-jp-accent scale-105' : 'text-stone-400 hover:text-jp-dark'" class="flex flex-col items-center gap-1 transition-all">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+        <span class="text-[9px] font-bold">必買清單</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <script>
+    const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+
+    createApp({
+      setup() {
+        // Core states
+        const tripTitle = ref("上海四天精華遊");
+        const daysCount = ref(4);
+        const activeDay = ref(1);
+        const currentTab = ref("itinerary");
+
+        // Iconic Spot database for one-click add
+        const iconicSpots = [
+          { title: "外灘觀景台", location: "上海市黃浦區中山東一路", category: "景點", lat: 31.2406, lng: 121.4901, note: "觀賞浦東陸家嘴天際線與浦西百年萬國建築群的最佳歷史景點。", suggestedNotes: "晚上19:00至22:00外灘會亮燈，建議早後半小時前往避開客流高峰！" },
+          { title: "豫園與九曲橋", location: "上海市黃浦區安仁街137號", category: "景點", lat: 31.2272, lng: 121.4921, note: "江南古典園林，周邊有熱鬧的城隍廟商圈，可以品嚐排隊名店南翔小籠包。", suggestedNotes: "園內九曲橋下午遊客極多，建議上午前往，或直接登陸商圈茶樓鳥瞰美景。" },
+          { title: "武康大樓", location: "上海市徐匯區淮海中路1850號", category: "景點", lat: 31.2017, lng: 121.4326, note: "鄔達克設計的傳奇熨斗狀網紅歷史大樓，周邊遍布法式梧桐與文藝咖啡館。", suggestedNotes: "大樓正對面的三角路口是經典拍攝視角，清晨8點到9點拍照光線極佳且無干擾。" },
+          { title: "東方明珠廣播電視塔", location: "上海市浦東新區世紀大道1號", category: "景點", lat: 31.2397, lng: 121.4998, note: "上海標誌性建築，內有259米全透明懸空觀光廊及上海歷史博物館。", suggestedNotes: "建議提早線上預約門票。塔底的城市歷史發展陳列館非常精彩，千萬別漏掉！" },
+          { title: "上海迪士尼樂園", location: "上海市浦東新區川沙新鎮", category: "活動", lat: 31.1415, lng: 121.6631, note: "亞洲最大迪士尼樂園，擁有獨家創極速光輪與絢麗的夜光幻影秀。",
+            suggestedNotes: "務必下載迪士尼官方App搶預約等候卡。熱門項目「創極速光輪」排隊時間長，建議一入園先衝！" },
+          { title: "上海中心大廈 (天際觀光)", location: "上海市浦東新區銀城中路501號", category: "景點", lat: 31.2335, lng: 121.5056, note: "中國第一高樓，搭乘超高速電梯直達118層上海之巔觀光廳。", suggestedNotes: "建議下午16:30登頂，可同時欣賞白天、落日夕陽與魔都繁華夜景！" }
+        ];
+
+        // Lists
+        const todos = ref([
+          { text: "辦理台胞證 (確認有效期限)", done: true },
+          { text: "下載高德地圖與支付寶/微信綁定信用卡", done: true },
+          { text: "購買中國大陸上網 SIM卡/eSIM", done: false },
+          { text: "準備高鐵車票微信小程式 / 12306註冊", done: false }
+        ]);
+        const newTodo = ref("");
+
+        const shoppingList = ref([
+          { text: "沈大成條頭糕 / 青糰", done: false, budget: "50" },
+          { text: "上海中心大廈限量明信片", done: true, budget: "15" },
+          { text: "大白兔奶糖聯名周邊", done: false, budget: "40" }
+        ]);
+        const newShopItem = ref({ text: "", budget: "" });
+
+        const events = ref([
+          { id: "e1", day: 1, time: "10:30", title: "抵達浦東機場", location: "上海浦東國際機場", category: "交通", note: "搭乘磁浮列車，僅需8分鐘即可到達龍陽路站。", suggestedNotes: "磁浮列車憑當日機票可享單程40元人民幣優惠。速度超快，值得體驗！", lat: 31.1443, lng: 121.8083 },
+          { id: "e2", day: 1, time: "12:00", title: "和平飯店 check-in", location: "上海和平飯店", category: "住宿", note: "辦理入住並放行李。", suggestedNotes: "和平飯店歷史悠久，大堂非常華麗。附近隨時可能塞車，推薦坐地鐵2號線至南京東路站。", lat: 31.2415, lng: 121.4889 },
+          { id: "e3", day: 1, time: "14:00", title: "豫園散策與午餐", location: "豫園商圈", category: "景點", note: "品嚐著名的南翔饅頭店小籠包。", suggestedNotes: "南翔饅頭店一樓排隊人潮極多，可以選擇上二樓或三樓雅座，雖然有低消但排隊時間能大幅減少！", lat: 31.2272, lng: 121.4921 },
+          { id: "e4", day: 1, time: "19:00", title: "外灘看夜景", location: "上海市黃浦區中山東一路", category: "景點", note: "散步欣賞浦東陸家嘴摩天大樓群夜色。", suggestedNotes: "外灘景觀燈每晚 19:00 至 22:00 開啟（冬季可能提早至21:30），請注意好遊覽時間。", lat: 31.2406, lng: 121.4901 },
+          { id: "e5", day: 2, time: "10:00", title: "武康路散步", location: "武康大樓", category: "景點", note: "網紅武康大樓拍照打卡，感受法租界梧桐樹街道。", suggestedNotes: "武康大樓正對面路口是絕佳拍攝點，早上去光線最好且遊客較少。附近咖啡館素質都很高。", lat: 31.2017, lng: 121.4326 }
+        ]);
+
+        // Time quick edits
+        const editingTimeId = ref(null);
+        const tempHours = ref("12");
+        const tempMinutes = ref("00");
+        const hoursList = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+        const minutesList = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+
+        // Modals & Dashboard
+        const showEventModal = ref(false);
+        const showCloudDashboard = ref(false);
+        const appsScriptUrl = ref("https://script.google.com/macros/s/AKfycbxtnUQhxZlvPtq0tIvoyglPcrQ6cl3z63FKBxZ6eXFMo3imbn2wlrA0xtioBe5I-odl5w/exec");
+        const autoSyncToGas = ref(true);
+        const gasLoading = ref(false);
+
+        const newEvent = ref({
+          day: 1, time: "12:00", title: "", location: "", category: "景點", note: ""
+        });
+
+        // Billing Ledger
+        const cnyExchangeRate = ref(4.55);
+        const bills = ref([
+          { id: "b1", title: "磁浮列車雙人來回票", category: "交通", payer: "我", amount: "160" },
+          { id: "b2", title: "南翔饅頭店小籠包與午餐", category: "餐飲", payer: "旅伴", amount: "220" },
+          { id: "b3", title: "地鐵一日票 x 2", category: "交通", payer: "我", amount: "36" },
+          { id: "b4", title: "武康路老洋房精品咖啡", category: "餐飲", payer: "旅伴", amount: "80" },
+          { id: "b5", title: "和平飯店精緻晚餐", category: "餐飲", payer: "我", amount: "650" }
+        ]);
+
+        // Toast notifications
+        const toast = ref({ show: false, message: "", type: "info" });
+        const triggerToast = (msg, type = "info") => {
+          toast.value.message = msg;
+          toast.value.type = type;
+          toast.value.show = true;
+          setTimeout(() => {
+            toast.value.show = false;
+          }, 3500);
+        };
+
+        // 背景同步防抖器
+        let syncTimeout = null;
+        const debouncedSyncToGas = () => {
+          if (syncTimeout) clearTimeout(syncTimeout);
+          syncTimeout = setTimeout(() => {
+            if (autoSyncToGas.value && appsScriptUrl.value) {
+              backgroundSyncToGas();
+            }
+          }, 1500);
+        };
+
+        // Local Storage Sync
+        const saveToLocalStorage = () => {
+          const stateToSave = {
+            tripTitle: tripTitle.value,
+            daysCount: daysCount.value,
+            todos: todos.value,
+            shoppingList: shoppingList.value,
+            events: events.value,
+            cnyExchangeRate: cnyExchangeRate.value,
+            bills: bills.value,
+            appsScriptUrl: appsScriptUrl.value,
+            autoSyncToGas: autoSyncToGas.value
+          };
+          localStorage.setItem("sh_planner_pro_v2", JSON.stringify(stateToSave));
+          debouncedSyncToGas();
+        };
+
+        const loadFromLocalStorage = () => {
+          const saved = localStorage.getItem("sh_planner_pro_v2");
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved);
+              if (parsed.tripTitle) tripTitle.value = parsed.tripTitle;
+              if (parsed.daysCount) daysCount.value = parsed.daysCount;
+              if (parsed.todos) todos.value = parsed.todos;
+              if (parsed.shoppingList) shoppingList.value = parsed.shoppingList;
+              if (parsed.events) events.value = parsed.events;
+              if (parsed.cnyExchangeRate) cnyExchangeRate.value = parsed.cnyExchangeRate;
+              if (parsed.bills) bills.value = parsed.bills;
+              if (parsed.appsScriptUrl) {
+                if (parsed.appsScriptUrl.includes("AKfycbyhosN9H6SEgJm90gH7UEco682_pGbfJdwZpMtyXXOuSsxi6BIiCrsS0SwAX4dWKBBoXA")) {
+                  appsScriptUrl.value = "https://script.google.com/macros/s/AKfycbxtnUQhxZlvPtq0tIvoyglPcrQ6cl3z63FKBxZ6eXFMo3imbn2wlrA0xtioBe5I-odl5w/exec";
+                } else {
+                  appsScriptUrl.value = parsed.appsScriptUrl;
+                }
+              }
+              if (parsed.autoSyncToGas !== undefined) autoSyncToGas.value = parsed.autoSyncToGas;
+            } catch (e) {
+              console.error("Local storage read error", e);
+            }
+          }
+        };
+
+        // URL share mechanics
+        const generateShareLink = () => {
+          try {
+            const dataToPack = {
+              title: tripTitle.value,
+              days: daysCount.value,
+              todos: todos.value,
+              shop: shoppingList.value,
+              events: events.value,
+              rate: cnyExchangeRate.value,
+              bills: bills.value
+            };
+            const jsonStr = JSON.stringify(dataToPack);
+            const compressed = btoa(encodeURIComponent(jsonStr));
+            const shareUrl = `${window.location.origin}${window.location.pathname}?share=${compressed}`;
+            
+            const tempInput = document.createElement("input");
+            tempInput.value = shareUrl;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand("copy");
+            document.body.removeChild(tempInput);
+
+            triggerToast("分享連結生成成功並已複製到剪貼簿！", "success");
+          } catch (e) {
+            triggerToast("連結生成失敗，資料量過大", "error");
+          }
+        };
+
+        const checkUrlForSharedData = () => {
+          const urlParams = new URLSearchParams(window.location.search);
+          const sharedData = urlParams.get("share");
+          if (sharedData) {
+            try {
+              const unpacked = decodeURIComponent(atob(sharedData));
+              const data = JSON.parse(unpacked);
+              if (data.title) tripTitle.value = data.title;
+              if (data.days) daysCount.value = data.days;
+              if (data.todos) todos.value = data.todos;
+              if (data.shop) shoppingList.value = data.shop;
+              if (data.events) events.value = data.events;
+              if (data.rate) cnyExchangeRate.value = data.rate;
+              if (data.bills) bills.value = data.bills;
+              
+              triggerToast("成功讀取並還原分享的行程資料！", "success");
+              window.history.replaceState({}, document.title, window.location.pathname);
+              saveToLocalStorage();
+            } catch (e) {
+              triggerToast("讀取分享連結失敗，資料毀損", "error");
+            }
+          }
+        };
+
+        // Leaflet Map Mechanics
+        let mapInstance = null;
+        let mapMarkers = [];
+
+        const initLeafletMap = () => {
+          const mapContainer = document.getElementById("map");
+          if (!mapContainer) return;
+
+          if (mapInstance) {
+            mapInstance.remove();
+            mapInstance = null;
+          }
+
+          let center = [31.2304, 121.4737]; // Shanghai default center
+          const todayEvents = dailyEvents.value.filter(e => e.lat && e.lng);
+          if (todayEvents.length > 0) {
+            center = [todayEvents[0].lat, todayEvents[0].lng];
+          }
+
+          mapInstance = L.map('map', {
+            zoomControl: false
+          }).setView(center, 13);
+          
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; CartoDB'
+          }).addTo(mapInstance);
+
+          L.control.zoom({
+            position: 'topright'
+          }).addTo(mapInstance);
+
+          drawMapMarkers();
+
+          setTimeout(() => {
+            if (mapInstance) mapInstance.invalidateSize();
+          }, 150);
+        };
+
+        const drawMapMarkers = () => {
+          if (!mapInstance) return;
+          mapMarkers.forEach(m => mapInstance.removeLayer(m));
+          mapMarkers = [];
+
+          const todayEvents = dailyEvents.value.filter(e => e.lat && e.lng);
+          if (todayEvents.length === 0) return;
+
+          const polylineCoords = [];
+
+          todayEvents.forEach((ev, idx) => {
+            const numIcon = L.divIcon({
+              className: 'custom-div-icon',
+              html: `<div class="flex items-center justify-center w-7 h-7 bg-amber-600 text-white rounded-full font-black border-2 border-white shadow-md text-xs">${idx + 1}</div>`,
+              iconSize: [28, 28],
+              iconAnchor: [14, 14]
+            });
+
+            const m = L.marker([ev.lat, ev.lng], { icon: numIcon })
+              .addTo(mapInstance)
+              .bindPopup(`<div class="text-xs font-sans p-1"><b>Day ${ev.day} - ${ev.time} ${ev.title}</b><br/><span class="text-stone-500">${ev.location}</span></div>`);
+            
+            mapMarkers.push(m);
+            polylineCoords.push([ev.lat, ev.lng]);
+          });
+
+          if (polylineCoords.length > 1) {
+            const routeLine = L.polyline(polylineCoords, {
+              color: '#D4A373',
+              weight: 4,
+              opacity: 0.9,
+              dashArray: '6, 8'
+            }).addTo(mapInstance);
+            mapMarkers.push(routeLine);
+          }
+
+          const group = new L.featureGroup(mapMarkers.filter(m => m instanceof L.Marker));
+          if (mapMarkers.filter(m => m instanceof L.Marker).length > 0) {
+            mapInstance.fitBounds(group.getBounds().pad(0.35));
+          }
+        };
+
+        // Calculations
+        const dailyEvents = computed(() => {
+          if (activeDay.value === 'todo') return [];
+          return events.value
+            .filter(e => e.day === activeDay.value)
+            .sort((a, b) => a.time.localeCompare(b.time));
+        });
+
+        const filteredBills = computed(() => {
+          return bills.value;
+        });
+
+        const filteredTotalCny = computed(() => {
+          const total = filteredBills.value.reduce((acc, b) => acc + (parseFloat(b.amount) || 0), 0);
+          return total.toFixed(1);
+        });
+
+        const filteredTotalTwd = computed(() => {
+          const total = filteredBills.value.reduce((acc, b) => acc + (parseFloat(b.amount) || 0), 0);
+          return (total * cnyExchangeRate.value).toFixed(0);
+        });
+
+        const allTotalTwd = computed(() => {
+          const total = bills.value.reduce((acc, b) => acc + (parseFloat(b.amount) || 0), 0);
+          return (total * cnyExchangeRate.value).toFixed(0);
+        });
+
+        const payerTotals = computed(() => {
+          let me = 0;
+          let companion = 0;
+          let kitty = 0;
+          bills.value.forEach(b => {
+            const amt = parseFloat(b.amount) || 0;
+            if (b.payer === "我") me += amt;
+            else if (b.payer === "旅伴") companion += amt;
+            else if (b.payer === "公積金") kitty += amt;
+          });
+          return {
+            meCny: me.toFixed(1),
+            meTwd: (me * cnyExchangeRate.value).toFixed(0),
+            companionCny: companion.toFixed(1),
+            companionTwd: (companion * cnyExchangeRate.value).toFixed(0),
+            kittyCny: kitty.toFixed(1),
+            kittyTwd: (kitty * cnyExchangeRate.value).toFixed(0)
+          };
+        });
+
+        const splitSuggestion = computed(() => {
+          const me = parseFloat(payerTotals.value.meTwd) || 0;
+          const comp = parseFloat(payerTotals.value.companionTwd) || 0;
+          const totalPublic = me + comp;
+          const average = totalPublic / 2;
+
+          if (me === comp) {
+            return {
+              averagePerPerson: average.toFixed(0),
+              advice: "完美平衡，分毫不差！",
+              class: "text-emerald-600"
+            };
+          } else if (me > comp) {
+            const diff = me - average;
+            return {
+              averagePerPerson: average.toFixed(0),
+              advice: `旅伴應付我 NT$ ${diff.toFixed(0)}`,
+              class: "text-amber-600 font-extrabold"
+            };
+          } else {
+            const diff = comp - average;
+            return {
+              averagePerPerson: average.toFixed(0),
+              advice: `我應付旅伴 NT$ ${diff.toFixed(0)}`,
+              class: "text-blue-600 font-extrabold"
+            };
+          }
+        });
+
+        // Gemini API configuration & retry system
+        const apiKey = ""; 
+        
+        const callGeminiWithBackoff = async (promptText, systemPrompt = null, isJson = false) => {
+          const maxRetries = 5;
+          let delay = 1000;
+          
+          const payload = {
+            contents: [{ parts: [{ text: promptText }] }]
+          };
+          if (systemPrompt) {
+            payload.systemInstruction = { parts: [{ text: systemPrompt }] };
+          }
+          if (isJson) {
+            payload.generationConfig = {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "OBJECT",
+                properties: {
+                  events: {
+                    type: "ARRAY",
+                    items: {
+                      type: "OBJECT",
+                      properties: {
+                        time: { type: "STRING" },
+                        title: { type: "STRING" },
+                        location: { type: "STRING" },
+                        category: { type: "STRING" },
+                        suggestedNotes: { type: "STRING" },
+                        lat: { type: "NUMBER" },
+                        lng: { type: "NUMBER" }
+                      },
+                      required: ["time", "title", "location", "category"]
+                    }
+                  }
+                },
+                required: ["events"]
+              }
+            };
+          }
+
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+              const res = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+              });
+              if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+              const data = await res.json();
+              return data.candidates?.[0]?.content?.parts?.[0]?.text;
+            } catch (error) {
+              if (attempt === maxRetries) {
+                throw error;
+              }
+              await new Promise(r => setTimeout(r, delay));
+              delay *= 2;
+            }
+          }
+        };
+
+        // AI Parsing Inputs
+        const aiInput = ref("");
+        const aiLoading = ref(false);
+
+        const parseAI = async () => {
+          if (!aiInput.value.trim()) return;
+          aiLoading.value = true;
+          try {
+            const systemPrompt = `你是一位精緻的上海旅遊助手。請幫忙解析使用者輸入的一小段旅遊行程，並輸出結構化 JSON 排程。
+            - 必須推算與辨識精確的上海地理坐標 (lat, lng)。
+            - 分類 category 只能從 '景點', '餐飲', '交通', '住宿', '活動' 中選擇。
+            - 請寫一段在上海遊玩時最刁鑽最實用的【50字以內極致避雷與防坑指南】suggestedNotes（包含地鐵出入口、APP推薦或客流避開建議）。`;
+            
+            const prompt = `分析這段旅程，規劃加入為 Day ${activeDay.value === 'todo' ? 1 : activeDay.value} 行程中: "${aiInput.value}"`;
+            
+            const resultText = await callGeminiWithBackoff(prompt, systemPrompt, true);
+            const parsed = JSON.parse(resultText);
+
+            if (parsed.events && parsed.events.length > 0) {
+              parsed.events.forEach(ev => {
+                const randomId = "ai_" + Math.random().toString(36).substr(2, 9);
+                events.value.push({
+                  id: randomId,
+                  day: activeDay.value === 'todo' ? 1 : activeDay.value,
+                  time: ev.time || "12:00",
+                  title: ev.title,
+                  location: ev.location || ev.title,
+                  category: ev.category || "景點",
+                  note: "",
+                  suggestedNotes: ev.suggestedNotes || "",
+                  lat: ev.lat || 31.2304,
+                  lng: ev.lng || 121.4737
+                });
+              });
+              triggerToast("AI 成功解析並匯入了行程！", "success");
+              aiInput.value = "";
+              saveToLocalStorage();
+              nextTick(() => {
+                initLeafletMap();
+              });
+            } else {
+              triggerToast("AI 無法明確解析地名或時間，請換個說法再試試", "info");
+            }
+          } catch (e) {
+            console.error(e);
+            triggerToast("AI 服務暫時無法連線，請檢查網路或稍後重試", "error");
+          } finally {
+            aiLoading.value = false;
+          }
+        };
+
+        // Get single spot guidance
+        const singleAiLoading = ref(null);
+        const fetchSingleEventAISuggestion = async (event) => {
+          singleAiLoading.value = event.id;
+          try {
+            const systemPrompt = "你是一位生活在上海多年的旅遊達人。請為給定地點提供最犀利、極致的避雷或排隊省時乾貨秘訣（字數務必控制在 50 字以內，不要廢話）。";
+            const prompt = `地點名稱：${event.title}，地址：${event.location}。請給出它的避雷防坑最核心建議。`;
+            const result = await callGeminiWithBackoff(prompt, systemPrompt, false);
+            event.suggestedNotes = result.trim();
+            saveToLocalStorage();
+            triggerToast("AI 行程攻略生成完畢！", "success");
+          } catch (e) {
+            triggerToast("生成攻略失敗，請稍後重試", "error");
+          } finally {
+            singleAiLoading.value = null;
+          }
+        };
+
+        // Actions
+        const addTodo = () => {
+          if (!newTodo.value.trim()) return;
+          todos.value.push({ text: newTodo.value.trim(), done: false });
+          newTodo.value = "";
+          saveToLocalStorage();
+          triggerToast("已加入準備項目！", "success");
+        };
+
+        const deleteTodo = (idx) => {
+          todos.value.splice(idx, 1);
+          saveToLocalStorage();
+        };
+
+        const addNewDay = () => {
+          daysCount.value++;
+          activeDay.value = daysCount.value;
+          saveToLocalStorage();
+          triggerToast(`已為您新增旅程 Day ${daysCount.value}！`, "success");
+        };
+
+        // Quick add spot
+        const addIconicSpot = (spot) => {
+          const randomId = "spot_" + Math.random().toString(36).substr(2, 9);
+          events.value.push({
+            id: randomId,
+            day: activeDay.value === 'todo' ? 1 : activeDay.value,
+            time: "14:00",
+            title: spot.title,
+            location: spot.location,
+            category: spot.category,
+            note: spot.note,
+            suggestedNotes: spot.suggestedNotes,
+            lat: spot.lat,
+            lng: spot.lng
+          });
+          saveToLocalStorage();
+          triggerToast(`已成功將「${spot.title}」加入 Day ${activeDay.value === 'todo' ? 1 : activeDay.value}！`, "success");
+          nextTick(() => {
+            initLeafletMap();
+          });
+        };
+
+        // Event Modal Actions
+        const openEventModal = () => {
+          newEvent.value = {
+            day: activeDay.value !== 'todo' ? activeDay.value : 1,
+            time: "12:00",
+            title: "",
+            location: "",
+            category: "景點",
+            note: ""
+          };
+          showEventModal.value = true;
+        };
+
+        const saveNewEvent = () => {
+          if (!newEvent.value.title.trim()) {
+            triggerToast("行程名稱不能為空喔！", "error");
+            return;
+          }
+          const randomId = "ev_" + Math.random().toString(36).substr(2, 9);
+          events.value.push({
+            id: randomId,
+            day: newEvent.value.day,
+            time: newEvent.value.time,
+            title: newEvent.value.title,
+            location: newEvent.value.location || newEvent.value.title,
+            category: newEvent.value.category,
+            note: newEvent.value.note,
+            suggestedNotes: "",
+            lat: 31.2304,
+            lng: 121.4737
+          });
+          showEventModal.value = false;
+          saveToLocalStorage();
+          triggerToast("已成功手動建立行程！", "success");
+          
+          if (activeDay.value === newEvent.value.day) {
+            nextTick(() => {
+              initLeafletMap();
+            });
+          }
+        };
+
+        const removeEvent = (id) => {
+          events.value = events.value.filter(e => e.id !== id);
+          saveToLocalStorage();
+          triggerToast("行程已刪除");
+          nextTick(() => {
+            initLeafletMap();
+          });
+        };
+
+        const moveEvent = (index, direction) => {
+          const list = [...dailyEvents.value];
+          const targetIdx = index + direction;
+          if (targetIdx < 0 || targetIdx >= list.length) return;
+          
+          const temp = list[index].time;
+          list[index].time = list[targetIdx].time;
+          list[targetIdx].time = temp;
+
+          saveToLocalStorage();
+          nextTick(() => {
+            initLeafletMap();
+          });
+        };
+
+        const startEditingTime = (event) => {
+          editingTimeId.value = event.id;
+          const [h, m] = event.time.split(":");
+          tempHours.value = h || "12";
+          tempMinutes.value = m || "00";
+        };
+
+        const saveTimeEdit = (event) => {
+          event.time = `${tempHours.value}:${tempMinutes.value}`;
+          editingTimeId.value = null;
+          saveToLocalStorage();
+          triggerToast("出發時間已更新！", "success");
+        };
+
+        // Budget Ledger Actions
+        const insertSpreadsheetRow = () => {
+          const randomId = "bill_" + Math.random().toString(36).substr(2, 9);
+          bills.value.push({
+            id: randomId,
+            title: "",
+            category: "其他",
+            payer: "我",
+            amount: "0"
+          });
+          saveToLocalStorage();
+        };
+
+        const removeBillRow = (id) => {
+          bills.value = bills.value.filter(b => b.id !== id);
+          saveToLocalStorage();
+        };
+
+        const onTitleInput = (bill) => {
+          bill.category = detectCategory(bill.title);
+          saveToLocalStorage();
+        };
+
+        const detectCategory = (title) => {
+          if (!title) return "其他";
+          const lower = title.toLowerCase();
+          if (lower.includes("地鐵") || lower.includes("打車") || lower.includes("高鐵") || lower.includes("計程車") || lower.includes("公車") || lower.includes("機票") || lower.includes("磁浮") || lower.includes("打的")) {
+            return "交通";
+          }
+          if (lower.includes("小籠") || lower.includes("麵") || lower.includes("餐") || lower.includes("咖啡") || lower.includes("飯") || lower.includes("酒") || lower.includes("茶") || lower.includes("肉") || lower.includes("糖")) {
+            return "餐飲";
+          }
+          if (lower.includes("門票") || lower.includes("景區") || lower.includes("塔") || lower.includes("票") || lower.includes("迪士尼") || lower.includes("園")) {
+            return "景點";
+          }
+          if (lower.includes("飯店") || lower.includes("民宿") || lower.includes("住") || lower.includes("酒店") || lower.includes("房")) {
+            return "住宿";
+          }
+          if (lower.includes("買") || lower.includes("禮") || lower.includes("特產") || lower.includes("手信") || lower.includes("伴手禮")) {
+            return "購物";
+          }
+          return "其他";
+        };
+
+        const getCategoryBadgeClass = (cat) => {
+          switch (cat) {
+            case '交通': return 'bg-sky-100 text-sky-800';
+            case '餐飲': return 'bg-orange-100 text-orange-800';
+            case '景點': return 'bg-emerald-100 text-emerald-800';
+            case '住宿': return 'bg-indigo-100 text-indigo-800';
+            case '購物': return 'bg-rose-100 text-rose-800';
+            default: return 'bg-stone-100 text-stone-600';
+          }
+        };
+
+        const getCatColor = (cat) => {
+          switch (cat) {
+            case '交通': return 'bg-sky-500 text-white';
+            case '餐飲': return 'bg-orange-400 text-white';
+            case '景點': return 'bg-emerald-500 text-white';
+            case '住宿': return 'bg-indigo-500 text-white';
+            case '活動': return 'bg-purple-500 text-white';
+            default: return 'bg-stone-400 text-white';
+          }
+        };
+
+        const getPayerClass = (payer) => {
+          switch (payer) {
+            case '我': return 'bg-emerald-100 text-emerald-800 font-bold';
+            case '旅伴': return 'bg-blue-100 text-blue-800 font-bold';
+            default: return 'bg-amber-100 text-amber-800 font-bold';
+          }
+        };
+
+        const addShopItem = () => {
+          if (!newShopItem.value.text.trim()) return;
+          shoppingList.value.push({
+            text: newShopItem.value.text.trim(),
+            done: false,
+            budget: newShopItem.value.budget ? String(newShopItem.value.budget) : ""
+          });
+          newShopItem.value = { text: "", budget: "" };
+          saveToLocalStorage();
+          triggerToast("必買清單已更新！", "success");
+        };
+
+        const deleteShopItem = (idx) => {
+          shoppingList.value.splice(idx, 1);
+          saveToLocalStorage();
+        };
+
+        const exportData = () => {
+          const stateToSave = {
+            tripTitle: tripTitle.value,
+            daysCount: daysCount.value,
+            todos: todos.value,
+            shoppingList: shoppingList.value,
+            events: events.value,
+            cnyExchangeRate: cnyExchangeRate.value,
+            bills: bills.value
+          };
+          const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(stateToSave, null, 2));
+          const dlAnchorElem = document.createElement('a');
+          dlAnchorElem.setAttribute("href", dataStr);
+          dlAnchorElem.setAttribute("download", `${tripTitle.value}_上海規劃.json`);
+          dlAnchorElem.click();
+          triggerToast("備份 JSON 導出成功！", "success");
+        };
+
+        const importData = (ev) => {
+          const files = ev.target.files;
+          if (files.length <= 0) return;
+          const fr = new FileReader();
+          fr.onload = (e) => {
+            try {
+              const parsed = JSON.parse(e.target.result);
+              if (parsed.tripTitle) tripTitle.value = parsed.tripTitle;
+              if (parsed.daysCount) daysCount.value = parsed.daysCount;
+              if (parsed.todos) todos.value = parsed.todos;
+              if (parsed.shoppingList) shoppingList.value = parsed.shoppingList;
+              if (parsed.events) events.value = parsed.events;
+              if (parsed.cnyExchangeRate) cnyExchangeRate.value = parsed.cnyExchangeRate;
+              if (parsed.bills) bills.value = parsed.bills;
+              
+              saveToLocalStorage();
+              triggerToast("本機 JSON 匯入還原成功！", "success");
+              nextTick(() => {
+                initLeafletMap();
+              });
+            } catch (err) {
+              triggerToast("讀取失敗，檔案格式不正確", "error");
+            }
+          };
+          fr.readAsText(files[0]);
+        };
+
+        // Google Apps Script Cloud Spreadsheet Integration
+        const syncToGoogleSheet = async () => {
+          if (!appsScriptUrl.value) return;
+          gasLoading.value = true;
+          try {
+            const payload = {
+              action: "save",
+              tripTitle: tripTitle.value,
+              daysCount: daysCount.value,
+              todos: todos.value,
+              shoppingList: shoppingList.value,
+              events: events.value,
+              cnyExchangeRate: cnyExchangeRate.value,
+              bills: bills.value
+            };
+            await fetch(appsScriptUrl.value, {
+              method: "POST",
+              mode: "no-cors", 
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            triggerToast("雲端同步要求已發送 (請至 Google 試算表確認更新)", "success");
+          } catch (e) {
+            triggerToast("雲端同步連線失敗", "error");
+          } finally {
+            gasLoading.value = false;
+          }
+        };
+
+        const loadFromGoogleSheet = async () => {
+          if (!appsScriptUrl.value) return;
+          gasLoading.value = true;
+          try {
+            const urlWithParams = `${appsScriptUrl.value}?action=load`;
+            const response = await fetch(urlWithParams);
+            const data = await response.json();
+            if (data && data.tripTitle) {
+              tripTitle.value = data.tripTitle;
+              daysCount.value = data.daysCount;
+              todos.value = data.todos || [];
+              shoppingList.value = data.shoppingList || [];
+              events.value = data.events || [];
+              cnyExchangeRate.value = data.cnyExchangeRate || 4.5;
+              bills.value = data.bills || [];
+              
+              saveToLocalStorage();
+              triggerToast("成功讀取雲端試算表並還原本機設定！", "success");
+              nextTick(() => {
+                initLeafletMap();
+              });
+            } else {
+              triggerToast("試算表中無有效的資料庫，請先執行上傳同步", "info");
+            }
+          } catch (e) {
+            triggerToast("自雲端讀取失敗，請確認 Apps Script 部署與連線設定", "error");
+          } finally {
+            gasLoading.value = false;
+          }
+        };
+
+        const backgroundSyncToGas = async () => {
+          if (!appsScriptUrl.value) return;
+          try {
+            const payload = {
+              action: "save",
+              tripTitle: tripTitle.value,
+              daysCount: daysCount.value,
+              todos: todos.value,
+              shoppingList: shoppingList.value,
+              events: events.value,
+              cnyExchangeRate: cnyExchangeRate.value,
+              bills: bills.value
+            };
+            await fetch(appsScriptUrl.value, {
+              method: "POST",
+              mode: "no-cors",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+          } catch (e) {
+            console.warn("Background auto sync failed", e);
+          }
+        };
+
+        const setTab = (tab) => {
+          currentTab.value = tab;
+          if (tab === 'itinerary' && activeDay.value === 'todo') {
+            activeDay.value = 1;
+          }
+          nextTick(() => {
+            if (tab === 'itinerary') {
+              initLeafletMap();
+            }
+          });
+        };
+
+        // Lifecycle Hooks (已修正：開啟網頁時會自動跟 Google 試算表同步)
+        onMounted(async () => {
+          // 1. 先讀取瀏覽器本機的 LocalStorage 快取，還原上次最後記錄
+          loadFromLocalStorage();
+          
+          // 2. 檢查有無 URL 分享連結並載入
+          checkUrlForSharedData();
+          
+          // 3. 簡單有力自動檢查：若已有設定 Google Apps Script Web App URL，則啟動自動雲端同步
+          if (appsScriptUrl.value && appsScriptUrl.value.trim() !== "") {
+            triggerToast("正在自動與雲端試算表同步...", "info");
+            await loadFromGoogleSheet();
+          } else {
+            // 提醒使用者未綁定
+            triggerToast("提示：尚未設定雲端試算表網址，目前為單機模式", "info");
+          }
+
+          // 4. 地圖初始化
+          nextTick(() => {
+            if (activeDay.value !== 'todo' && currentTab.value === 'itinerary') {
+              initLeafletMap();
+            }
+          });
+        });
+
+        // Watchers
+        watch(activeDay, (newVal) => {
+          if (newVal !== 'todo') {
+            currentTab.value = 'itinerary';
+            nextTick(() => {
+              initLeafletMap();
+            });
+          }
+        });
+
+        watch(
+          [tripTitle, todos, shoppingList, events, bills, cnyExchangeRate],
+          () => {
+            saveToLocalStorage();
+          },
+          { deep: true }
+        );
+
+        return {
+          tripTitle,
+          daysCount,
+          activeDay,
+          currentTab,
+          todos,
+          newTodo,
+          shoppingList,
+          newShopItem,
+          events,
+          editingTimeId,
+          tempHours,
+          tempMinutes,
+          hoursList,
+          minutesList,
+          showEventModal,
+          showCloudDashboard,
+          appsScriptUrl,
+          autoSyncToGas,
+          gasLoading,
+          newEvent,
+          cnyExchangeRate,
+          bills,
+          toast,
+          triggerToast,
+          saveToLocalStorage,
+          generateShareLink,
+          dailyEvents,
+          filteredBills,
+          filteredTotalCny,
+          filteredTotalTwd,
+          allTotalTwd,
+          payerTotals,
+          splitSuggestion,
+          aiInput,
+          aiLoading,
+          parseAI,
+          singleAiLoading,
+          fetchSingleEventAISuggestion,
+          addTodo,
+          deleteTodo,
+          addNewDay,
+          iconicSpots,
+          addIconicSpot,
+          openEventModal,
+          saveNewEvent,
+          removeEvent,
+          moveEvent,
+          startEditingTime,
+          saveTimeEdit,
+          insertSpreadsheetRow,
+          removeBillRow,
+          onTitleInput,
+          detectCategory,
+          getCategoryBadgeClass,
+          getCatColor,
+          getPayerClass,
+          addShopItem,
+          deleteShopItem,
+          exportData,
+          importData,
+          syncToGoogleSheet,
+          loadFromGoogleSheet,
+          setTab
+        };
+      }
+    }).mount('#app');
+  </script>
+
+</body>
+</html>
