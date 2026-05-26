@@ -446,7 +446,7 @@
         <div class="bg-white rounded-3xl p-4 shadow-sm border border-stone-200/60 space-y-3">
           <h3 class="text-xs font-bold text-jp-dark flex items-center gap-1.5 border-b pb-2 border-stone-100">
             <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-            💡 旅伴分攤與智慧結算建議
+            💡 恩璩分攤與智慧結算建議
           </h3>
           
           <div class="grid grid-cols-3 gap-2 text-center">
@@ -455,7 +455,7 @@
               <span class="text-xs font-black text-emerald-700">NT$ {{ payerTotals.meTwd }}</span>
             </div>
             <div class="p-2.5 bg-blue-50 rounded-2xl border border-blue-100">
-              <span class="text-[9px] text-blue-800 font-bold block mb-0.5">旅伴 付了</span>
+              <span class="text-[9px] text-blue-800 font-bold block mb-0.5">恩璩 付了</span>
               <span class="text-xs font-black text-blue-700">NT$ {{ payerTotals.companionTwd }}</span>
             </div>
             <div class="p-2.5 bg-amber-50 rounded-2xl border border-amber-100">
@@ -536,7 +536,7 @@
                           class="w-full text-center rounded-lg py-1 px-1.5 text-[10px] font-black cursor-pointer appearance-none border-none focus:ring-1 focus:ring-jp-accent h-7 bg-white shadow-sm"
                           :class="getPayerClass(bill.payer)">
                     <option value="我">我付</option>
-                    <option value="旅伴">旅伴付</option>
+                    <option value="恩璩">恩璩付</option>
                     <option value="公積金">公積金</option>
                   </select>
                   <div class="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-stone-500/80">
@@ -612,7 +612,7 @@
                             class="w-full text-center rounded-lg py-0.5 px-1 text-[10px] font-black cursor-pointer bg-stone-50 border-none focus:ring-0 focus:outline-none select-none"
                             :class="getPayerClass(bill.payer)">
                       <option value="我">我付</option>
-                      <option value="旅伴">旅伴付</option>
+                      <option value="恩璩">恩璩付</option>
                       <option value="公積金">公積金</option>
                     </select>
                   </td>
@@ -815,9 +815,9 @@
         const cnyExchangeRate = ref(4.55);
         const bills = ref([
           { id: "b1", title: "磁浮列車雙人來回票", category: "交通", payer: "我", amount: "160" },
-          { id: "b2", title: "南翔饅頭店小籠包與午餐", category: "餐飲", payer: "旅伴", amount: "220" },
+          { id: "b2", title: "南翔饅頭店小籠包與午餐", category: "餐飲", payer: "恩璩", amount: "220" },
           { id: "b3", title: "地鐵一日票 x 2", category: "交通", payer: "我", amount: "36" },
-          { id: "b4", title: "武康路老洋房精品咖啡", category: "餐飲", payer: "旅伴", amount: "80" },
+          { id: "b4", title: "武康路老洋房精品咖啡", category: "餐飲", payer: "恩璩", amount: "80" },
           { id: "b5", title: "和平飯店精緻晚餐", category: "餐飲", payer: "我", amount: "650" }
         ]);
 
@@ -1053,7 +1053,7 @@
           bills.value.forEach(b => {
             const amt = parseFloat(b.amount) || 0;
             if (b.payer === "我") me += amt;
-            else if (b.payer === "旅伴") companion += amt;
+            else if (b.payer === "恩璩") companion += amt;
             else if (b.payer === "公積金") kitty += amt;
           });
           return {
@@ -1082,14 +1082,14 @@
             const diff = me - average;
             return {
               averagePerPerson: average.toFixed(0),
-              advice: `旅伴應付我 NT$ ${diff.toFixed(0)}`,
+              advice: `恩璩應付我 NT$ ${diff.toFixed(0)}`,
               class: "text-amber-600 font-extrabold"
             };
           } else {
             const diff = comp - average;
             return {
               averagePerPerson: average.toFixed(0),
-              advice: `我應付旅伴 NT$ ${diff.toFixed(0)}`,
+              advice: `我應付恩璩 NT$ ${diff.toFixed(0)}`,
               class: "text-blue-600 font-extrabold"
             };
           }
@@ -1419,7 +1419,7 @@
         const getPayerClass = (payer) => {
           switch (payer) {
             case '我': return 'bg-emerald-100 text-emerald-800 font-bold';
-            case '旅伴': return 'bg-blue-100 text-blue-800 font-bold';
+            case '恩璩': return 'bg-blue-100 text-blue-800 font-bold';
             default: return 'bg-amber-100 text-amber-800 font-bold';
           }
         };
