@@ -145,7 +145,7 @@
           </ol>
         </div>
 
-        <!-- URL Shareable Cloud Link Section (REAL FUNCTIONALITY) -->
+        <!-- URL Shareable Cloud Link Section -->
         <div class="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100 space-y-2.5">
           <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
             <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 10.742l1.99 1.137m0 0l1.99-1.137m-1.99 1.137V16.75M2 12a10 10 0 1120 0 10 10 0 01-20 0z"></path></svg>
@@ -161,6 +161,40 @@
         </div>
 
         <button @click="showCloudDashboard = false" class="w-full py-2.5 bg-stone-100 rounded-xl text-xs font-bold text-stone-500">關閉面板</button>
+      </div>
+    </div>
+
+    <!-- PWA Install Banner -->
+    <div v-if="showInstallBanner" class="fixed bottom-20 left-4 right-4 z-[90] bg-white border border-jp-yellow p-4 rounded-3xl shadow-2xl flex flex-col gap-3 transition-all animate-bounce-short">
+      <div class="flex justify-between items-start">
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-2xl bg-jp-accent flex items-center justify-center text-white text-lg font-bold">滬</div>
+          <div>
+            <h4 class="font-bold text-xs text-jp-dark">安裝「上海日誌 Pro」至手機</h4>
+            <p class="text-[10px] text-stone-500">免網址列，享受 100% 原生極速 App 體驗！</p>
+          </div>
+        </div>
+        <button @click="dismissPwaBanner" class="p-1 text-stone-400 hover:text-stone-600">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <!-- Guide Content depending on OS -->
+      <div class="bg-jp-cream/50 p-2.5 rounded-2xl border border-jp-yellow/60 text-[10px] text-stone-600 leading-relaxed">
+        <div v-if="pwaSystem === 'ios'" class="flex items-center gap-2">
+          <span class="p-1 bg-white rounded-lg shadow-sm text-xs">📤</span>
+          <span>點選 Safari 瀏覽器底部的<strong>「分享」</strong>按鈕，然後向下滾動選擇<strong>「加入主畫面」</strong>即可！</span>
+        </div>
+        <div v-else class="flex flex-col gap-2">
+          <div class="flex items-center gap-2">
+            <span class="p-1 bg-white rounded-lg shadow-sm text-xs">⋮</span>
+            <span>點選 Chrome 右上角<strong>「選單」</strong>，選擇<strong>「安裝應用程式」</strong>或<strong>「新增至主畫面」</strong>！</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex gap-2">
+        <button @click="dismissPwaBanner" class="flex-1 py-2 bg-stone-100 hover:bg-stone-200 text-stone-500 rounded-xl text-[10px] font-bold transition-all">稍後再說 (7天)</button>
       </div>
     </div>
 
@@ -322,7 +356,19 @@
                class="bg-white rounded-2xl p-4 shadow-sm border border-stone-100 relative group transition-all duration-200 hover:shadow-md">
             <div class="flex justify-between items-start mb-2">
               
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 flex-wrap">
+                <!-- Day Move Dropdown -->
+                <div class="relative inline-block text-left shrink-0">
+                  <select :value="event.day" @change="moveEventToDay(event, $event.target.value)"
+                          class="text-[10px] font-extrabold rounded-xl py-1 pl-2.5 pr-6 bg-jp-yellow/60 hover:bg-jp-yellow border-none text-jp-dark cursor-pointer appearance-none outline-none focus:ring-1 focus:ring-jp-accent h-7 select-none transition-colors"
+                          title="移至其他天數">
+                    <option v-for="d in daysCount" :key="d" :value="d">Day {{ d }}</option>
+                  </select>
+                  <div class="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-stone-600">
+                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </div>
+                </div>
+
                 <!-- 小時與分鐘下拉式快速調整器 -->
                 <div v-if="editingTimeId === event.id" 
                      class="flex items-center gap-1 bg-jp-yellow/80 border border-jp-accent/40 rounded-xl px-2 py-0.5 shadow-inner z-20 transition-all">
@@ -344,7 +390,7 @@
                 <!-- 預設顯示，點選可直接原地編輯時間 -->
                 <button v-else 
                         @click="startEditingTime(event)" 
-                        class="flex items-center bg-jp-accent hover:bg-jp-accent/90 text-white rounded-xl px-2.5 py-1 text-[11px] font-bold gap-1 shadow-sm transition-all"
+                        class="flex items-center bg-jp-accent hover:bg-jp-accent/90 text-white rounded-xl px-2.5 py-1 text-[11px] font-bold gap-1 shadow-sm transition-all animate-fade"
                         title="點擊原地修改時間">
                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                   <span>{{ event.time }}</span>
@@ -354,7 +400,7 @@
                 <span :class="['text-[10px] font-bold px-2 py-0.5 rounded-lg', getCatColor(event.category)]">{{ event.category }}</span>
               </div>
 
-              <div class="flex gap-1">
+              <div class="flex gap-1 shrink-0">
                 <button @click="moveEvent(idx, -1)" class="p-1 text-jp-light hover:text-jp-accent" title="上移">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
                 </button>
@@ -446,12 +492,12 @@
         <div class="bg-white rounded-3xl p-4 shadow-sm border border-stone-200/60 space-y-3">
           <h3 class="text-xs font-bold text-jp-dark flex items-center gap-1.5 border-b pb-2 border-stone-100">
             <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-            💡 恩璩分攤與智慧結算建議
+            💡 旅伴分攤與智慧結算建議
           </h3>
           
           <div class="grid grid-cols-3 gap-2 text-center">
             <div class="p-2.5 bg-emerald-50 rounded-2xl border border-emerald-100">
-              <span class="text-[9px] text-emerald-800 font-bold block mb-0.5">我 付了</span>
+              <span class="text-[9px] text-emerald-800 font-bold block mb-0.5">展源 付了</span>
               <span class="text-xs font-black text-emerald-700">NT$ {{ payerTotals.meTwd }}</span>
             </div>
             <div class="p-2.5 bg-blue-50 rounded-2xl border border-blue-100">
@@ -535,7 +581,7 @@
                   <select v-model="bill.payer" @change="saveToLocalStorage" 
                           class="w-full text-center rounded-lg py-1 px-1.5 text-[10px] font-black cursor-pointer appearance-none border-none focus:ring-1 focus:ring-jp-accent h-7 bg-white shadow-sm"
                           :class="getPayerClass(bill.payer)">
-                    <option value="我">我付</option>
+                    <option value="展源">展源付</option>
                     <option value="恩璩">恩璩付</option>
                     <option value="公積金">公積金</option>
                   </select>
@@ -611,7 +657,7 @@
                     <select v-model="bill.payer" @change="saveToLocalStorage" 
                             class="w-full text-center rounded-lg py-0.5 px-1 text-[10px] font-black cursor-pointer bg-stone-50 border-none focus:ring-0 focus:outline-none select-none"
                             :class="getPayerClass(bill.payer)">
-                      <option value="我">我付</option>
+                      <option value="展源">展源付</option>
                       <option value="恩璩">恩璩付</option>
                       <option value="公積金">公積金</option>
                     </select>
@@ -800,6 +846,10 @@
         const hoursList = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
         const minutesList = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
+        // PWA Setup state
+        const showInstallBanner = ref(false);
+        const pwaSystem = ref("ios");
+
         // Modals & Dashboard
         const showEventModal = ref(false);
         const showCloudDashboard = ref(false);
@@ -811,14 +861,14 @@
           day: 1, time: "12:00", title: "", location: "", category: "景點", note: ""
         });
 
-        // Billing Ledger
+        // Billing Ledger (預設付款人設為：展源)
         const cnyExchangeRate = ref(4.55);
         const bills = ref([
-          { id: "b1", title: "磁浮列車雙人來回票", category: "交通", payer: "我", amount: "160" },
+          { id: "b1", title: "磁浮列車雙人來回票", category: "交通", payer: "展源", amount: "160" },
           { id: "b2", title: "南翔饅頭店小籠包與午餐", category: "餐飲", payer: "恩璩", amount: "220" },
-          { id: "b3", title: "地鐵一日票 x 2", category: "交通", payer: "我", amount: "36" },
+          { id: "b3", title: "地鐵一日票 x 2", category: "交通", payer: "展源", amount: "36" },
           { id: "b4", title: "武康路老洋房精品咖啡", category: "餐飲", payer: "恩璩", amount: "80" },
-          { id: "b5", title: "和平飯店精緻晚餐", category: "餐飲", payer: "我", amount: "650" }
+          { id: "b5", title: "和平飯店精緻晚餐", category: "餐飲", payer: "展源", amount: "650" }
         ]);
 
         // Toast notifications
@@ -829,7 +879,7 @@
           toast.value.show = true;
           setTimeout(() => {
             toast.value.show = false;
-          }, 3500);
+          }, 4500);
         };
 
         // 背景同步防抖器
@@ -884,6 +934,86 @@
               console.error("Local storage read error", e);
             }
           }
+        };
+
+        // 「簡單有力 自動查詢問題並提醒修改」- 智慧自檢模組
+        const runSmartAudit = () => {
+          // 1. 檢查有無完全空白沒有行程的天數
+          for (let d = 1; d <= daysCount.value; d++) {
+            const dayEvents = events.value.filter(e => e.day === d);
+            if (dayEvents.length === 0) {
+              triggerToast(`💡 行程健檢提示：Day ${d} 目前尚未安排行程，建議使用頂部 AI 快速塞入行程！`, "info");
+              return; // 一次只跳一個，不干擾視覺
+            }
+          }
+
+          // 2. 檢查記帳單中有無金額為零的漏填項目
+          const zeroBills = bills.value.filter(b => (parseFloat(b.amount) || 0) === 0);
+          if (zeroBills.length > 0) {
+            triggerToast(`💡 記帳優化提醒：發現有 ${zeroBills.length} 筆金額為 0 元的帳目，別忘了補上金額喔！`, "info");
+            return;
+          }
+
+          // 3. 檢查匯率異常
+          if (cnyExchangeRate.value < 4.0 || cnyExchangeRate.value > 5.0) {
+            triggerToast(`💡 匯率提醒：目前台幣換算率為 ${cnyExchangeRate.value}，建議確認最新的匯率喔！`, "info");
+          }
+        };
+
+        // PWA Dynamic Manifest Initer
+        const setupPWA = () => {
+          const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+          
+          // 建立 PWA Manifest
+          const manifest = {
+            "name": "極簡上海日誌 Shanghai Planner Pro",
+            "short_name": "上海日誌",
+            "start_url": window.location.href,
+            "display": "standalone",
+            "background_color": "#FAF6EE",
+            "theme_color": "#D4A373",
+            "icons": [
+              {
+                "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23D4A373' rx='20'/><text x='50' y='60' font-size='40' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'>滬</text></svg>",
+                "sizes": "192x192",
+                "type": "image/png"
+              }
+            ]
+          };
+          const stringManifest = JSON.stringify(manifest);
+          const blob = new Blob([stringManifest], {type: 'application/json'});
+          const manifestURL = URL.createObjectURL(blob);
+          const link = document.createElement('link');
+          link.rel = 'manifest';
+          link.href = manifestURL;
+          document.head.appendChild(link);
+
+          // Apple Touch Icon
+          const appleIcon = document.createElement('link');
+          appleIcon.rel = 'apple-touch-icon';
+          appleIcon.href = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23D4A373' rx='20'/><text x='50' y='60' font-size='40' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'>滬</text></svg>";
+          document.head.appendChild(appleIcon);
+
+          // 判斷系統並決定是否顯示 PWA 安裝引導
+          if (!isStandalone) {
+            const ua = navigator.userAgent.toLowerCase();
+            if (/iphone|ipad|ipod/.test(ua)) {
+              pwaSystem.value = "ios";
+            } else {
+              pwaSystem.value = "android";
+            }
+            
+            // 7天內如果手動關閉過則不顯示
+            const dismissed = localStorage.getItem('pwa_banner_dismissed_v2');
+            if (!dismissed || Date.now() - parseInt(dismissed) > 7 * 24 * 60 * 60 * 1000) {
+              showInstallBanner.value = true;
+            }
+          }
+        };
+
+        const dismissPwaBanner = () => {
+          showInstallBanner.value = false;
+          localStorage.setItem('pwa_banner_dismissed_v2', Date.now().toString());
         };
 
         // URL share mechanics
@@ -1046,57 +1176,58 @@
           return (total * cnyExchangeRate.value).toFixed(0);
         });
 
+        // 智慧結算 - 付款者客製化 (展源 / 恩璩 / 公積金)
         const payerTotals = computed(() => {
-          let me = 0;
-          let companion = 0;
+          let zhanyuan = 0;
+          let enqu = 0;
           let kitty = 0;
           bills.value.forEach(b => {
             const amt = parseFloat(b.amount) || 0;
-            if (b.payer === "我") me += amt;
-            else if (b.payer === "恩璩") companion += amt;
+            if (b.payer === "展源") zhanyuan += amt;
+            else if (b.payer === "恩璩") enqu += amt;
             else if (b.payer === "公積金") kitty += amt;
           });
           return {
-            meCny: me.toFixed(1),
-            meTwd: (me * cnyExchangeRate.value).toFixed(0),
-            companionCny: companion.toFixed(1),
-            companionTwd: (companion * cnyExchangeRate.value).toFixed(0),
+            meCny: zhanyuan.toFixed(1),
+            meTwd: (zhanyuan * cnyExchangeRate.value).toFixed(0),
+            companionCny: enqu.toFixed(1),
+            companionTwd: (enqu * cnyExchangeRate.value).toFixed(0),
             kittyCny: kitty.toFixed(1),
             kittyTwd: (kitty * cnyExchangeRate.value).toFixed(0)
           };
         });
 
         const splitSuggestion = computed(() => {
-          const me = parseFloat(payerTotals.value.meTwd) || 0;
-          const comp = parseFloat(payerTotals.value.companionTwd) || 0;
-          const totalPublic = me + comp;
+          const zhanyuan = parseFloat(payerTotals.value.meTwd) || 0;
+          const enqu = parseFloat(payerTotals.value.companionTwd) || 0;
+          const totalPublic = zhanyuan + enqu;
           const average = totalPublic / 2;
 
-          if (me === comp) {
+          if (zhanyuan === enqu) {
             return {
               averagePerPerson: average.toFixed(0),
               advice: "完美平衡，分毫不差！",
               class: "text-emerald-600"
             };
-          } else if (me > comp) {
-            const diff = me - average;
+          } else if (zhanyuan > enqu) {
+            const diff = zhanyuan - average;
             return {
               averagePerPerson: average.toFixed(0),
-              advice: `恩璩應付我 NT$ ${diff.toFixed(0)}`,
+              advice: `恩璩應付展源 NT$ ${diff.toFixed(0)}`,
               class: "text-amber-600 font-extrabold"
             };
           } else {
-            const diff = comp - average;
+            const diff = enqu - average;
             return {
               averagePerPerson: average.toFixed(0),
-              advice: `我應付恩璩 NT$ ${diff.toFixed(0)}`,
+              advice: `展源應付恩璩 NT$ ${diff.toFixed(0)}`,
               class: "text-blue-600 font-extrabold"
             };
           }
         });
 
         // Gemini API configuration & retry system
-        const apiKey = "AIzaSyDv0LjDFYF_IVI9Q9PxisMX22JblhvZu9c"; 
+        const apiKey = ""; 
         
         const callGeminiWithBackoff = async (promptText, systemPrompt = null, isJson = false) => {
           const maxRetries = 5;
@@ -1270,6 +1401,20 @@
           });
         };
 
+        // 快速將特定行程移動至其他天數
+        const moveEventToDay = (event, targetDay) => {
+          const dayNum = parseInt(targetDay);
+          if (isNaN(dayNum) || dayNum < 1 || dayNum > daysCount.value) return;
+          
+          event.day = dayNum;
+          saveToLocalStorage();
+          triggerToast(`已將「${event.title}」移至 Day ${dayNum}！`, "success");
+          
+          nextTick(() => {
+            initLeafletMap();
+          });
+        };
+
         // Event Modal Actions
         const openEventModal = () => {
           newEvent.value = {
@@ -1350,14 +1495,14 @@
           triggerToast("出發時間已更新！", "success");
         };
 
-        // Budget Ledger Actions
+        // Budget Ledger Actions (預設設定為展源付款)
         const insertSpreadsheetRow = () => {
           const randomId = "bill_" + Math.random().toString(36).substr(2, 9);
           bills.value.push({
             id: randomId,
             title: "",
             category: "其他",
-            payer: "我",
+            payer: "展源",
             amount: "0"
           });
           saveToLocalStorage();
@@ -1418,7 +1563,7 @@
 
         const getPayerClass = (payer) => {
           switch (payer) {
-            case '我': return 'bg-emerald-100 text-emerald-800 font-bold';
+            case '展源': return 'bg-emerald-100 text-emerald-800 font-bold';
             case '恩璩': return 'bg-blue-100 text-blue-800 font-bold';
             default: return 'bg-amber-100 text-amber-800 font-bold';
           }
@@ -1582,24 +1727,31 @@
           });
         };
 
-        // Lifecycle Hooks (已修正：開啟網頁時會自動跟 Google 試算表同步)
+        // Lifecycle Hooks
         onMounted(async () => {
-          // 1. 先讀取瀏覽器本機的 LocalStorage 快取，還原上次最後記錄
+          // 1. 初始化 PWA 靜態與 Apple Icon 設定、安裝提示偵測
+          setupPWA();
+
+          // 2. 載入本機 LocalStorage 快取
           loadFromLocalStorage();
           
-          // 2. 檢查有無 URL 分享連結並載入
+          // 3. 檢查外部分享連結
           checkUrlForSharedData();
           
-          // 3. 簡單有力自動檢查：若已有設定 Google Apps Script Web App URL，則啟動自動雲端同步
+          // 4. 自動雲端同步 check
           if (appsScriptUrl.value && appsScriptUrl.value.trim() !== "") {
             triggerToast("正在自動與雲端試算表同步...", "info");
             await loadFromGoogleSheet();
           } else {
-            // 提醒使用者未綁定
             triggerToast("提示：尚未設定雲端試算表網址，目前為單機模式", "info");
           }
 
-          // 4. 地圖初始化
+          // 5. 簡單有力自動健檢：自動檢查行程空檔、帳單空欄，隨時彈窗通知使用者修正
+          setTimeout(() => {
+            runSmartAudit();
+          }, 1800);
+
+          // 6. 地圖初始化渲染
           nextTick(() => {
             if (activeDay.value !== 'todo' && currentTab.value === 'itinerary') {
               initLeafletMap();
@@ -1640,6 +1792,9 @@
           tempMinutes,
           hoursList,
           minutesList,
+          showInstallBanner,
+          pwaSystem,
+          dismissPwaBanner,
           showEventModal,
           showCloudDashboard,
           appsScriptUrl,
@@ -1669,6 +1824,7 @@
           addNewDay,
           iconicSpots,
           addIconicSpot,
+          moveEventToDay,
           openEventModal,
           saveNewEvent,
           removeEvent,
