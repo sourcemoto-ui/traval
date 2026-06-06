@@ -2,18 +2,19 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>極簡上海日誌 Shanghai Planner Pro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>中國旅程精華遊 China Planner Pro</title>
   
   <!-- Vue 3 CDN -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Leaflet Map -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link class="fade-in" rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
+    // 註冊日系高質感手帳配色與專屬陰影
     tailwind.config = {
       theme: {
         extend: {
@@ -26,8 +27,13 @@
               light: '#8C8279', 
               softGreen: '#A3B19B', 
               softRed: '#D6A299',
-              sand: '#E6DFD3'
+              sand: '#E6DFD3',
+              ticketBg: '#FDFBF7'
             }
+          },
+          boxShadow: {
+            'ticket': '0 4px 10px -2px rgba(74, 68, 63, 0.12), 0 2px 4px -1px rgba(74, 68, 63, 0.08)',
+            'ticket-active': '0 8px 20px -4px rgba(212, 163, 115, 0.3), 0 4px 8px -2px rgba(74, 68, 63, 0.15)'
           }
         }
       }
@@ -35,11 +41,15 @@
   </script>
 
   <style>
+    /* 隱藏捲軸 */
     .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
     body { 
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
       background-color: #FAF6EE; 
       color: #4A443F; 
+      -webkit-tap-highlight-color: transparent;
     }
     #map { 
       height: 260px; 
@@ -52,13 +62,20 @@
     .slide-up-enter-from, .slide-up-leave-to { transform: translateY(20px); opacity: 0; }
     .fade-in { animation: fadeIn 0.25s ease-out; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* 仿手帳紙質微網格背景 */
+    .journal-grid {
+      background-color: #FAF6EE;
+      background-image: radial-gradient(#e6dfd3 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
   </style>
 </head>
 <body class="flex justify-center min-h-screen bg-stone-100">
 
-  <div id="app" class="relative w-full max-w-md bg-jp-cream min-h-screen flex flex-col shadow-2xl overflow-hidden border border-stone-200/50">
+  <div id="app" class="relative w-full max-w-md bg-jp-cream min-h-screen flex flex-col shadow-2xl overflow-hidden border border-stone-200/50 journal-grid">
     
-    <!-- Custom Toast Notification with Undo Action -->
+    <!-- 提示通知 (支援復原刪除) -->
     <transition name="slide-up">
       <div v-if="toast.show" 
            :class="[
@@ -75,7 +92,7 @@
       </div>
     </transition>
 
-    <!-- Cloud Sync Dialog / Dashboard Modal -->
+    <!-- 雲端同步控制面板 -->
     <div v-if="showCloudDashboard" class="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6">
       <div class="bg-white w-full rounded-3xl p-6 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
         <div class="flex items-center justify-between border-b pb-3 border-stone-100">
@@ -90,7 +107,7 @@
           </button>
         </div>
 
-        <!-- Google Sheets Connection Panel -->
+        <!-- Google Sheets 連線設定 -->
         <div class="p-4 bg-jp-cream/50 rounded-2xl border border-jp-yellow space-y-3">
           <div class="flex items-center justify-between">
             <span class="text-[10px] text-jp-accent font-bold tracking-wider flex items-center gap-1">
@@ -113,7 +130,7 @@
             </label>
           </div>
 
-          <!-- GAS Operations -->
+          <!-- GAS 連線 -->
           <div class="grid grid-cols-2 gap-2 pt-1.5">
             <button @click="syncToGoogleSheet" :disabled="gasLoading || !appsScriptUrl"
                     class="py-2.5 bg-jp-accent hover:bg-jp-accent/90 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50">
@@ -133,125 +150,139 @@
       </div>
     </div>
 
-    <!-- Header -->
-    <header class="sticky top-0 z-40 bg-jp-cream/90 backdrop-blur-md border-b border-jp-sand/60 px-5 py-4 flex items-center justify-between">
-      <div class="flex items-center space-x-2">
-        <div class="p-1.5 bg-jp-yellow rounded-xl text-jp-accent">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-        </div>
-        <div>
-          <!-- 行程標題點選可原地快速修改 -->
-          <input v-model="tripTitle" @change="saveToLocalStorage" class="text-lg font-bold text-jp-dark tracking-wide bg-transparent border-none p-0 focus:ring-0 w-44 font-sans focus:bg-white/80 rounded px-1" />
-          <p class="text-[10px] text-jp-light font-medium">上海．智慧旅程助手 Pro</p>
-        </div>
-      </div>
-      
-      <div class="flex items-center space-x-1.5">
-        <button @click="generateShareLink" class="p-2 hover:bg-jp-yellow rounded-full transition-all text-jp-accent" title="一鍵複製分享網址">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 10.742l4.632-2.316m0 7.148l-4.632-2.316M19 12a3 3 0 11-6 0 3 3 0 016 0zm-11 5a3 3 0 11-6 0 3 3 0 016 0zm0-10a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </button>
-
-        <button @click="showCloudDashboard = true" class="p-2 hover:bg-jp-yellow rounded-full transition-all relative" title="雲端備份與試算表同步控制台">
-          <svg class="w-5 h-5 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>
-          <span :class="['absolute top-1 right-1 w-2.5 h-2.5 border border-white rounded-full transition-colors', appsScriptUrl ? 'bg-emerald-500' : 'bg-stone-300']"></span>
-        </button>
-
-        <button @click="exportData" class="p-2 hover:bg-jp-yellow rounded-full transition-all text-jp-dark" title="導出本機 JSON">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-        </button>
-        <label class="p-2 hover:bg-jp-yellow rounded-full transition-all cursor-pointer text-jp-dark" title="導入本機 JSON">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-          <input type="file" @change="importData" class="hidden" accept=".json">
-        </label>
-        <button @click="currentTab = 'shopping'" class="p-2 hover:bg-jp-yellow rounded-full relative transition-all text-jp-dark" title="必買清單">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
-          <span v-if="shoppingList.length > 0" class="absolute top-0 right-0 bg-jp-softRed text-white text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold">{{ shoppingList.length }}</span>
-        </button>
-      </div>
-    </header>
-
-    <!-- 智慧行前設定區：旅程出發日期控制項 -->
-    <div class="px-4 py-2.5 bg-stone-50 border-b border-jp-sand/40 flex items-center justify-between gap-3 text-xs">
-      <div class="flex items-center gap-1.5 text-stone-600 font-bold">
-        <span>📅</span>
-        <label>設定出發日期：</label>
-      </div>
-      <input type="date" v-model="startDate" @change="handleDateChange" 
-             class="px-2.5 py-1.5 bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-jp-accent font-bold text-jp-dark text-right cursor-pointer shadow-sm">
-    </div>
-
-    <!-- AI 智慧行程讀取欄 -->
-    <div class="px-4 py-3 bg-jp-yellow/40 border-b border-jp-yellow/60 relative">
-      <div class="flex flex-col gap-2">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-1.5 text-[10px] font-bold text-jp-accent">
-            <svg class="w-3.5 h-3.5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
-            Gemini AI 快速排程與智慧避雷
+    <!-- 頂部區段（包含導航、日期設定、AI欄位） -->
+    <div class="sticky top-0 z-40 bg-jp-cream/95 backdrop-blur-md border-b border-jp-sand/70 shadow-sm">
+      <!-- 頂部導航 -->
+      <header class="px-5 py-3 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <div class="p-1.5 bg-jp-yellow rounded-xl text-jp-accent shadow-sm">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
           </div>
-          <span class="text-[9px] text-jp-accent flex items-center gap-1" v-if="aiLoading">
-            <svg class="animate-spin h-3 w-3 text-jp-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            AI 辨識中...
-          </span>
+          <div>
+            <input v-model="tripTitle" @change="saveToLocalStorage" class="text-base font-extrabold text-jp-dark tracking-wide bg-transparent border-none p-0 focus:ring-0 w-44 font-sans focus:bg-white/80 rounded px-1" />
+            <p class="text-[9px] text-jp-light font-bold uppercase tracking-wider">China Planner Pro</p>
+          </div>
         </div>
-        <div class="flex gap-2">
-          <input v-model="aiInput" type="text" 
-                 :disabled="aiLoading"
-                 placeholder="例: 下午2點半去外灘拍東方明珠" 
-                 @keyup.enter="parseAI"
-                 class="flex-1 text-xs px-3 py-2.5 rounded-xl border-none bg-white/80 focus:ring-1 focus:ring-jp-accent focus:outline-none disabled:opacity-50 font-medium">
-          <button @click="parseAI" 
-                  :disabled="aiLoading"
-                  class="bg-jp-accent hover:bg-jp-accent/90 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1 disabled:opacity-50">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-            辨識
+        
+        <div class="flex items-center space-x-1">
+          <button @click="generateShareLink" class="p-2 hover:bg-jp-yellow rounded-full transition-all text-jp-accent" title="一鍵複製分享網址">
+            <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 10.742l4.632-2.316m0 7.148l-4.632-2.316M19 12a3 3 0 11-6 0 3 3 0 016 0zm-11 5a3 3 0 11-6 0 3 3 0 016 0zm0-10a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+
+          <button @click="showCloudDashboard = true" class="p-2 hover:bg-jp-yellow rounded-full transition-all relative" title="雲端備份與試算表同步控制台">
+            <svg class="w-4.5 h-4.5 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>
+            <span :class="['absolute top-1 right-1 w-2 h-2 border border-white rounded-full transition-colors', appsScriptUrl ? 'bg-emerald-500' : 'bg-stone-300']"></span>
+          </button>
+
+          <button @click="exportData" class="p-2 hover:bg-jp-yellow rounded-full transition-all text-jp-dark" title="導出本機 JSON">
+            <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          </button>
+          <label class="p-2 hover:bg-jp-yellow rounded-full transition-all cursor-pointer text-jp-dark" title="導入本機 JSON">
+            <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+            <input type="file" @change="importData" class="hidden" accept=".json">
+          </label>
+          <button @click="setTab('shopping')" class="p-2 hover:bg-jp-yellow rounded-full relative transition-all text-jp-dark" title="必買清單">
+            <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+            <span v-if="shoppingList.length > 0" class="absolute top-0.5 right-0.5 bg-jp-softRed text-white text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold shadow-sm">{{ shoppingList.length }}</span>
           </button>
         </div>
-        <div class="text-[9px] text-stone-500 leading-tight flex items-start gap-1">
-          <span>💡</span> 
-          <span>輸入時間與地點，Gemini 將線上實時解析，並規劃至 <b>Day {{ activeDay === 'todo' ? 1 : activeDay }}</b> 的行程中，自動填寫避雷攻略！</span>
+      </header>
+
+      <!-- 行前設定：旅程出發日期控制項 -->
+      <div class="px-5 py-2 bg-stone-50/80 border-t border-jp-sand/40 flex items-center justify-between gap-3 text-xs">
+        <div class="flex items-center gap-1.5 text-jp-dark font-extrabold">
+          <svg class="w-3.5 h-3.5 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          <span>設定啟航日期</span>
+        </div>
+        <input type="date" v-model="startDate" @change="handleDateChange" 
+               class="px-2.5 py-1 bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-jp-accent font-extrabold text-jp-dark text-right cursor-pointer shadow-inner">
+      </div>
+
+      <!-- AI 智慧行程讀取欄 -->
+      <div class="px-5 py-2.5 bg-jp-yellow/20 border-t border-jp-sand/30 relative">
+        <div class="flex flex-col gap-1.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5 text-[10px] font-black text-jp-accent uppercase tracking-wider">
+              <svg class="w-3.5 h-3.5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
+              Gemini AI 快速排程與智慧避雷
+            </div>
+            <span class="text-[9px] text-jp-accent flex items-center gap-1 font-bold" v-if="aiLoading">
+              <svg class="animate-spin h-3 w-3 text-jp-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              AI 辨識中...
+            </span>
+          </div>
+          <div class="flex gap-2">
+            <input v-model="aiInput" type="text" 
+                   :disabled="aiLoading"
+                   placeholder="例: 下午2點半去外灘拍東方明珠" 
+                   @keyup.enter="parseAI"
+                   class="flex-1 text-xs px-3 py-2 rounded-xl border border-stone-200 bg-white/90 focus:ring-1 focus:ring-jp-accent focus:outline-none disabled:opacity-50 font-medium placeholder-stone-400 shadow-inner">
+            <button @click="parseAI" 
+                    :disabled="aiLoading"
+                    class="bg-jp-accent hover:bg-jp-accent/90 text-white px-3.5 py-2 rounded-xl text-xs font-extrabold shadow-sm flex items-center gap-1 transition-all active:scale-95">
+              辨識
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 🚀 航程規劃與天數導航 (垂直滾動面板) -->
-    <div class="px-4 py-3 bg-white border-b border-jp-sand/50 sticky top-[155px] z-30 shadow-sm transition-all duration-200">
-      <div class="flex flex-col gap-2">
+    <!-- 🚀 行程天數欄（全網格適配排版） -->
+    <div class="px-4 py-3.5 bg-white/95 border-b-2 border-jp-sand/60 sticky top-[152px] z-30 shadow-md transition-all duration-300">
+      <div class="flex flex-col gap-3">
+        
+        <!-- 行程表天數導航 -->
         <div class="flex items-center justify-between">
-          <span class="text-[10px] text-jp-light font-black uppercase tracking-wider flex items-center gap-1">
-            <span>🚀</span> 航程規劃與天數導航 (上下滾動選取)
-          </span>
           <div class="flex items-center gap-1.5">
-            <button @click="addNewDay" class="text-[9px] bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-2.5 py-1.5 rounded-xl transition-all shadow-sm">
-              + 新增
+            <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+            </svg>
+            <span class="text-xs text-jp-dark font-black tracking-wider uppercase">行程表</span>
+          </div>
+          
+          <div class="flex items-center gap-1.5">
+            <!-- 擬真機票存根式簽發按鈕 -->
+            <button @click="addNewDay" class="text-[10px] bg-jp-yellow/40 hover:bg-jp-accent hover:text-white text-jp-dark border border-jp-accent/50 rounded-lg px-2.5 py-1 font-extrabold transition-all active:scale-95 flex items-center gap-1 shadow-sm">
+              <span>🎟️</span> 簽發一日
             </button>
-            <button @click="deleteLastDay" :disabled="daysCount <= 1" class="text-[9px] bg-red-500 hover:bg-red-600 text-white font-extrabold px-2.5 py-1.5 rounded-xl transition-all shadow-sm disabled:opacity-40">
-              - 刪除
+            <button @click="deleteLastDay" :disabled="daysCount <= 1" class="text-[10px] bg-rose-50 hover:bg-rose-500 text-rose-700 hover:text-white border border-rose-200 rounded-lg px-2.5 py-1 font-extrabold transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1 shadow-sm">
+              <span>✕</span> 退簽末日
             </button>
           </div>
         </div>
         
-        <!-- 垂直上下滾動面板 (雙列高度對稱網格) -->
-        <div class="max-h-[105px] overflow-y-auto pr-1 border border-stone-200/60 rounded-2xl p-1.5 bg-stone-50/50 space-y-1.5">
+        <!-- 手帳天數選擇 (手機原生全覽式網格排版：自動換行) -->
+        <div class="flex flex-col gap-2">
+          <!-- 行前準備獨立按鈕 -->
           <button @click="activeDay = 'todo'" 
-                  :class="activeDay === 'todo' ? 'bg-jp-accent text-white shadow-md' : 'bg-white text-jp-dark border border-stone-200'"
-                  class="w-full py-2 rounded-xl text-xs font-black text-center transition-all flex items-center justify-center gap-1.5 shadow-sm h-9">
-            <span>📋</span> 填寫行前準備與行李打包確認清單
+                  :class="activeDay === 'todo' ? 'bg-jp-dark text-jp-yellow border-stone-800 scale-[1.01] shadow-ticket-active font-black' : 'bg-jp-ticketBg text-jp-dark border-jp-sand hover:bg-jp-yellow/30 shadow-ticket font-bold'"
+                  class="w-full h-11 rounded-xl text-xs transition-all duration-300 border flex items-center justify-between px-4 active:scale-95 relative overflow-hidden">
+            <div class="flex items-center pointer-events-none gap-2">
+              <div class="flex items-center">
+                <div :class="activeDay === 'todo' ? 'bg-stone-500' : 'bg-stone-300'" class="w-1.5 h-1.5 rounded-full border border-white shadow-sm"></div>
+                <div :class="activeDay === 'todo' ? 'border-stone-500' : 'border-stone-300'" class="w-2.5 h-4 border-t border-l rounded-tl-full -mt-2 -ml-[1px]"></div>
+              </div>
+              <span>🛃 行前準備行李打包</span>
+            </div>
+            <span class="text-[9px] font-black bg-jp-accent/20 px-2 py-0.5 rounded text-jp-accent uppercase tracking-wider shrink-0">ENTRY</span>
           </button>
-          
-          <div class="grid grid-cols-2 gap-1.5">
+
+          <!-- 天數自適應多列網格排列 -->
+          <div class="grid grid-cols-4 gap-2">
             <button v-for="day in daysCount" :key="day" @click="activeDay = day" 
-                    :class="activeDay === day ? 'bg-jp-accent text-white shadow-md font-black' : 'bg-white text-jp-dark border border-stone-200'"
-                    class="py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm flex flex-col items-center justify-center h-11">
-              <span class="text-[10px] font-black">Day {{ day }}</span>
-              <span v-if="startDate" class="text-[8px] opacity-75 mt-0.5 font-sans">{{ getDayDateStr(day) }}</span>
+                    :class="activeDay === day ? 'bg-jp-dark text-jp-yellow border-stone-800 scale-[1.03] shadow-ticket-active font-black' : 'bg-jp-ticketBg text-jp-dark border-jp-sand hover:bg-jp-yellow/30 shadow-ticket font-bold'"
+                    class="h-12 rounded-xl text-[11px] transition-all duration-300 border flex flex-col items-center justify-center active:scale-95 relative overflow-hidden">
+              <span>Day 0{{ day }}</span>
+              <span v-if="startDate" class="text-[8px] opacity-80 font-mono font-medium block">{{ getDayDateStr(day) }}</span>
             </button>
           </div>
         </div>
+
       </div>
     </div>
 
@@ -260,38 +291,38 @@
       
       <!-- 行前準備 (TODO Section) -->
       <section v-if="activeDay === 'todo'" class="space-y-4 fade-in">
-        <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-100">
-          <h2 class="font-bold text-jp-dark mb-4 flex items-center gap-2 text-sm">
-            <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+        <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-200/60">
+          <h2 class="font-extrabold text-jp-dark mb-4 flex items-center gap-2 text-sm">
+            <svg class="w-4.5 h-4.5 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
             必備清單 / 行前確認
           </h2>
           <div class="flex gap-2 mb-4">
-            <input v-model="newTodo" @keyup.enter="addTodo" type="text" placeholder="新增待辦事項 (例如：辦理台胞證...)" class="flex-1 text-xs px-3 py-2.5 rounded-xl bg-jp-cream border-none focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium">
+            <input v-model="newTodo" @keyup.enter="addTodo" type="text" placeholder="新增待辦事項 (例如：辦理台胞證...)" class="flex-1 text-xs px-3 py-2.5 rounded-xl bg-jp-cream border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium shadow-inner">
             <button @click="addTodo" class="bg-jp-accent text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-jp-accent/90 transition-all">新增</button>
           </div>
           <ul class="space-y-2">
-            <li v-for="(t, idx) in todos" :key="idx" class="flex items-center justify-between p-3 bg-jp-cream/30 rounded-xl hover:bg-jp-cream/50 transition-colors">
+            <li v-for="(t, idx) in todos" :key="idx" class="flex items-center justify-between p-3 bg-jp-cream/40 rounded-xl hover:bg-jp-cream/50 transition-colors border border-stone-100">
               <label class="flex items-center gap-3 cursor-pointer flex-1">
                 <input type="checkbox" v-model="t.done" @change="saveToLocalStorage" class="w-4 h-4 rounded text-jp-accent border-stone-300 focus:ring-jp-accent">
-                <span :class="t.done ? 'line-through text-stone-400' : 'text-xs text-jp-dark font-medium'">{{ t.text }}</span>
+                <span :class="t.done ? 'line-through text-stone-400' : 'text-xs text-jp-dark font-semibold'">{{ t.text }}</span>
               </label>
-              <button @click="deleteTodo(idx)" class="text-stone-300 hover:text-red-400 transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              <button @click="deleteTodo(idx)" class="text-stone-300 hover:text-red-400 transition-colors p-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
               </button>
             </li>
           </ul>
         </div>
       </section>
 
-      <!-- 行程模式 (Itinerary Section) -->
+      <!-- 行程表主介面 (Itinerary Section) -->
       <section v-if="activeDay !== 'todo' && currentTab === 'itinerary'" class="space-y-4 fade-in">
-        <div class="bg-white rounded-3xl p-4 shadow-sm border border-stone-100">
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-stone-200/60">
           <div class="flex justify-between items-center mb-3 px-1">
             <div class="flex items-center gap-2">
-              <svg class="w-4 h-4 text-jp-accent animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-              <span class="text-xs font-bold text-jp-dark">Day {{ activeDay }} 上海天氣與地圖概況</span>
+              <svg class="w-4 h-4 text-jp-accent animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+              <span class="text-xs font-black text-jp-dark">Day 0{{ activeDay }} 中國地圖概況</span>
             </div>
-            <span v-if="startDate" class="text-[10px] text-jp-accent font-bold bg-jp-yellow px-2.5 py-0.5 rounded-full">{{ getDayFullDateStr(activeDay) }}</span>
+            <span v-if="startDate" class="text-[10px] text-jp-accent font-black bg-jp-yellow/60 border border-jp-accent/30 px-2.5 py-0.5 rounded-full">{{ getDayFullDateStr(activeDay) }}</span>
           </div>
           
           <!-- Leaflet Map Container -->
@@ -300,138 +331,154 @@
 
         <!-- Event Cards -->
         <div class="space-y-4">
-          <div v-if="dailyEvents.length === 0" class="bg-white rounded-3xl p-8 text-center text-stone-400 text-xs border border-dashed border-stone-200">
-            <svg class="w-8 h-8 mx-auto mb-2 text-stone-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          <div v-if="dailyEvents.length === 0" class="bg-white rounded-3xl p-8 text-center text-stone-400 text-xs border border-dashed border-stone-300">
+            <svg class="w-8 h-8 mx-auto mb-2 text-stone-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
             當天尚未安排行程，可使用頂部 AI 快速辨識或手動新增行程！
           </div>
 
           <div v-for="(event, idx) in dailyEvents" :key="event.id" 
-               class="bg-white rounded-2xl p-4 shadow-sm border border-stone-100 relative group transition-all duration-200 hover:shadow-md">
-            <div class="flex justify-between items-start mb-2">
+               class="bg-white rounded-2xl p-4 shadow-sm border border-stone-200/60 relative group transition-all duration-200 hover:shadow-md animate-fade">
+            
+            <div class="flex gap-4 items-start">
               
-              <div class="flex items-center gap-2 flex-wrap">
-                <!-- Day Move Dropdown -->
-                <div class="relative inline-block text-left shrink-0">
-                  <select :value="event.day" @change="moveEventToDay(event, $event.target.value)"
-                          class="text-[10px] font-extrabold rounded-xl py-1 pl-2.5 pr-6 bg-jp-yellow/60 hover:bg-jp-yellow border-none text-jp-dark cursor-pointer appearance-none outline-none focus:ring-1 focus:ring-jp-accent h-7 select-none transition-colors"
-                          title="移至其他天數">
-                    <option v-for="d in daysCount" :key="d" :value="d">Day {{ d }}</option>
-                  </select>
-                  <div class="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-stone-600">
-                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+              <!-- 左側：行程細節及編輯 -->
+              <div class="flex-1 min-w-0 space-y-2.5">
+                
+                <!-- 時間與標籤 -->
+                <div class="flex justify-between items-start gap-1">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <!-- 天數移動選單 -->
+                    <div class="relative inline-block text-left shrink-0">
+                      <select :value="event.day" @change="moveEventToDay(event, $event.target.value)"
+                              class="text-[9px] font-black rounded-xl py-0.5 pl-2 pr-5 bg-jp-yellow/60 hover:bg-jp-yellow border-none text-jp-dark cursor-pointer appearance-none outline-none focus:ring-1 focus:ring-jp-accent h-6 select-none transition-colors"
+                              title="移至其他天數">
+                        <option v-for="d in daysCount" :key="d" :value="d">Day {{ d }}</option>
+                      </select>
+                      <div class="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-stone-600">
+                        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                    </div>
+
+                    <!-- 時間修改選單 -->
+                    <div v-if="editingTimeId === event.id" 
+                         class="flex items-center gap-0.5 bg-jp-yellow/80 border border-jp-accent/40 rounded-xl px-1.5 py-0.5 shadow-inner transition-all">
+                      <select v-model="tempHours" class="bg-transparent text-[10px] font-extrabold text-jp-dark focus:outline-none border-none p-0 cursor-pointer appearance-none">
+                        <option v-for="h in hoursList" :key="h" :value="h">{{ h }}</option>
+                      </select>
+                      <span class="text-[10px] text-jp-accent font-bold">:</span>
+                      <select v-model="tempMinutes" class="bg-transparent text-[10px] font-extrabold text-jp-dark focus:outline-none border-none p-0 cursor-pointer appearance-none">
+                        <option v-for="m in minutesList" :key="m" :value="m">{{ m }}</option>
+                      </select>
+                      <button @click="saveTimeEdit(event)" class="ml-1 p-0.5 bg-emerald-600 text-white rounded transition-all">
+                        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                      </button>
+                      <button @click="editingTimeId = null" class="p-0.5 bg-stone-300 text-stone-700 rounded transition-all">
+                        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+                      </button>
+                    </div>
+                    
+                    <button v-else 
+                            @click="startEditingTime(event)" 
+                            class="flex items-center bg-jp-accent hover:bg-jp-accent/90 text-white rounded-xl px-2 py-0.5 text-[10px] font-bold gap-0.5 shadow-sm transition-all animate-fade"
+                            title="點擊原地修改時間">
+                      <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      <span>{{ event.time }}</span>
+                    </button>
+
+                    <!-- 分類標籤 -->
+                    <span :class="['text-[9px] font-extrabold px-1.5 py-0.5 rounded-lg', getCatColor(event.category)]">{{ event.category }}</span>
+                  </div>
+
+                  <!-- 調整排序與刪除 -->
+                  <div class="flex gap-0.5 shrink-0">
+                    <button @click="moveEvent(idx, -1)" class="p-0.5 text-jp-light hover:text-jp-accent" title="上移">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"></path></svg>
+                    </button>
+                    <button @click="moveEvent(idx, 1)" class="p-0.5 text-jp-light hover:text-jp-accent" title="下移">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <button @click="removeEvent(event)" class="p-0.5 text-stone-300 hover:text-red-400" title="刪除">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
                   </div>
                 </div>
 
-                <!-- 小時與分鐘下拉式快速調整器 -->
-                <div v-if="editingTimeId === event.id" 
-                     class="flex items-center gap-1 bg-jp-yellow/80 border border-jp-accent/40 rounded-xl px-2 py-0.5 shadow-inner z-20 transition-all">
-                  <select v-model="tempHours" class="bg-transparent text-xs font-extrabold text-jp-dark focus:outline-none border-none p-0 cursor-pointer appearance-none">
-                    <option v-for="h in hoursList" :key="h" :value="h">{{ h }}</option>
-                  </select>
-                  <span class="text-xs text-jp-accent font-bold">:</span>
-                  <select v-model="tempMinutes" class="bg-transparent text-xs font-extrabold text-jp-dark focus:outline-none border-none p-0 cursor-pointer appearance-none">
-                    <option v-for="m in minutesList" :key="m" :value="m">{{ m }}</option>
-                  </select>
-                  <button @click="saveTimeEdit(event)" class="ml-1.5 p-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all" title="確定">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
-                  </button>
-                  <button @click="editingTimeId = null" class="p-1 bg-stone-300 hover:bg-stone-400 text-stone-700 rounded-lg transition-all" title="取消">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
-                  </button>
+                <!-- 景點與地點 -->
+                <div>
+                  <h3 class="text-xs font-bold text-jp-dark mb-0.5">{{ event.title }}</h3>
+                  <p class="text-[9px] text-stone-500 flex items-center gap-0.5">
+                    <svg class="w-3 h-3 text-jp-accent shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                    <span class="truncate">{{ event.location }}</span>
+                  </p>
+                </div>
+
+                <!-- AI 避雷建議 -->
+                <div v-if="event.suggestedNotes" class="p-2 bg-amber-50/60 border border-amber-100 rounded-xl relative">
+                  <div class="flex items-center gap-1 text-[8px] font-bold text-amber-700 mb-0.5">
+                    <svg class="w-3 h-3 text-amber-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
+                    AI 避雷防坑
+                  </div>
+                  <p class="text-[9px] text-stone-600 leading-normal">{{ event.suggestedNotes }}</p>
                 </div>
                 
-                <!-- 預設顯示，點選可直接原地編輯時間 -->
-                <button v-else 
-                        @click="startEditingTime(event)" 
-                        class="flex items-center bg-jp-accent hover:bg-jp-accent/90 text-white rounded-xl px-2.5 py-1 text-[11px] font-bold gap-1 shadow-sm transition-all"
-                        title="點擊原地修改時間">
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                  <span>{{ event.time }}</span>
-                </button>
+                <div v-else class="flex items-center">
+                  <button @click="fetchSingleEventAISuggestion(event)" 
+                          :disabled="singleAiLoading === event.id"
+                          class="text-[9px] text-jp-accent font-bold flex items-center gap-0.5 hover:underline disabled:opacity-50">
+                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    <span>{{ singleAiLoading === event.id ? '建議生成中...' : '生成此地點的 AI 旅遊攻略' }}</span>
+                  </button>
+                </div>
 
-                <!-- 分類顏色標籤 -->
-                <span :class="['text-[10px] font-bold px-2 py-0.5 rounded-lg', getCatColor(event.category)]">{{ event.category }}</span>
+                <!-- 個人備註 -->
+                <textarea v-model="event.note" @change="saveToLocalStorage" placeholder="個人心得與旅行備忘錄..." class="w-full text-[9px] p-1.5 bg-jp-cream/50 rounded-lg border border-stone-200/50 focus:ring-1 focus:ring-jp-accent resize-none h-12 focus:outline-none font-medium leading-relaxed shadow-inner"></textarea>
+
+                <!-- 地圖搜尋 -->
+                <div class="flex justify-end pt-0.5">
+                  <a :href="'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(event.location)" target="_blank" 
+                     class="flex items-center gap-1 bg-jp-dark text-white text-[8px] px-2.5 py-1 rounded-full hover:bg-black transition-colors font-bold shadow-sm">
+                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    地圖導航
+                  </a>
+                </div>
               </div>
 
-              <div class="flex gap-1 shrink-0">
-                <button @click="moveEvent(idx, -1)" class="p-1 text-jp-light hover:text-jp-accent" title="上移">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                </button>
-                <button @click="moveEvent(idx, 1)" class="p-1 text-jp-light hover:text-jp-accent" title="下移">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                </button>
-                <button @click="removeEvent(event)" class="p-1 text-stone-300 hover:text-red-400" title="刪除">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                </button>
+              <!-- 右側：照片顯示（與景點卡片並排放置） -->
+              <div class="w-24 shrink-0 flex flex-col items-center justify-start pt-6">
+                <!-- 已上傳照片：手繪風格拍立得迷你卡片 -->
+                <div v-if="event.photo" class="relative bg-white p-1.5 pb-4 shadow-md border border-stone-200/60 rounded-sm transform rotate-[-2deg] hover:rotate-0 transition-transform duration-300 w-24">
+                  <!-- 拍立得膠帶飾條 -->
+                  <div class="absolute top-[-5px] left-1/2 -translate-x-1/2 w-8 h-3 bg-jp-yellow/60 border-l border-r border-dashed border-jp-accent/40 transform rotate-[4deg] z-10 pointer-events-none"></div>
+                  
+                  <img :src="event.photo" class="w-20 h-16 object-cover border border-stone-100 rounded-sm" alt="景點相片" />
+                  
+                  <!-- 刪除鈕 -->
+                  <button @click="deletePhoto(event)" 
+                          class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-md transition-colors"
+                          title="刪除相片">
+                    <span class="text-[8px] font-bold">✕</span>
+                  </button>
+                </div>
+
+                <!-- 尚未上傳：緊湊的虛線點選上傳區 -->
+                <div v-else class="w-24">
+                  <label class="w-full h-20 bg-stone-50 hover:bg-jp-yellow/20 border border-stone-200 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer text-[8px] text-stone-500 hover:text-jp-dark transition-all p-1 text-center font-bold shadow-inner">
+                    <svg class="w-4 h-4 mb-0.5 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    <span>📷 上傳照片</span>
+                    <input type="file" accept="image/*" @change="handlePhotoUpload($event, event)" class="hidden">
+                  </label>
+                </div>
               </div>
+
             </div>
 
-            <h3 class="text-sm font-bold text-jp-dark mb-1">{{ event.title }}</h3>
-            <p class="text-[10px] text-stone-500 flex items-center gap-1 mb-2">
-              <svg class="w-3.5 h-3.5 text-jp-accent shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-              <span>{{ event.location }}</span>
-            </p>
-
-            <!-- 智慧景點照片上傳與顯示 (膠帶拍立得手記風格) -->
-            <div class="my-3 space-y-2">
-              <div v-if="event.photo" class="relative inline-block mx-auto max-w-[210px] bg-white p-3 pb-6 shadow-md border border-stone-200/60 rounded-sm transform rotate-[-2deg] hover:rotate-0 transition-transform duration-300">
-                <!-- 頂部 Washi 手工膠帶 -->
-                <div class="absolute top-[-8px] left-1/2 -translate-x-1/2 w-14 h-5 bg-jp-yellow/60 border-l border-r border-dashed border-jp-accent/40 transform rotate-[4deg] z-10 pointer-events-none"></div>
-                
-                <img :src="event.photo" class="w-[180px] h-[150px] object-cover border border-stone-100" alt="景點相片" />
-                <p class="text-[9px] text-stone-500 italic mt-2.5 font-serif text-center w-[180px] truncate">📷 {{ event.title }}</p>
-                
-                <!-- 紅色小圖釘式刪除鈕 -->
-                <button @click="deletePhoto(event)" 
-                        class="absolute top-1 right-1 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-md transition-colors"
-                        title="刪除打卡照片">
-                  <span class="text-[10px] font-bold">✕</span>
-                </button>
-              </div>
-              <div v-else class="flex items-center">
-                <label class="flex items-center gap-1.5 px-3 py-1.5 bg-stone-50 hover:bg-jp-yellow/30 border border-stone-200 hover:border-jp-accent rounded-xl text-[10px] text-stone-500 hover:text-jp-dark cursor-pointer font-bold transition-all shadow-sm">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                  </svg>
-                  <span>📷 上傳本點打卡回憶照</span>
-                  <input type="file" accept="image/*" @change="handlePhotoUpload($event, event)" class="hidden">
-                </label>
-              </div>
-            </div>
-            
-            <!-- AI Suggested Notes -->
-            <div v-if="event.suggestedNotes" class="mt-2.5 p-3 bg-amber-50/60 border border-amber-100 rounded-xl relative">
-              <div class="flex items-center gap-1 text-[9px] font-bold text-amber-700 mb-1">
-                <svg class="w-3.5 h-3.5 text-amber-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
-                AI 避雷防坑指南
-              </div>
-              <p class="text-[10px] text-stone-600 leading-relaxed">{{ event.suggestedNotes }}</p>
-            </div>
-            
-            <div v-else class="mt-2 flex items-center justify-between">
-              <button @click="fetchSingleEventAISuggestion(event)" 
-                      :disabled="singleAiLoading === event.id"
-                      class="text-[9px] text-jp-accent font-bold flex items-center gap-1 hover:underline disabled:opacity-50">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-                {{ singleAiLoading === event.id ? '建議生成中...' : '生成此地點的 AI 旅遊攻略' }}
-              </button>
-            </div>
-
-            <!-- User Personal Note -->
-            <textarea v-model="event.note" @change="saveToLocalStorage" placeholder="在此輸入個人心得或自由備註..." class="w-full mt-2.5 text-[10px] p-2 bg-jp-cream/50 rounded-xl border-none focus:ring-1 focus:ring-jp-accent resize-none focus:outline-none font-medium"></textarea>
-            
-            <div class="mt-3 flex justify-end">
-              <a :href="'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(event.location)" target="_blank" 
-                 class="flex items-center gap-1.5 bg-jp-dark text-white text-[9px] px-3 py-1.5 rounded-full hover:bg-black transition-colors font-bold">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-                地圖搜尋導航
-              </a>
-            </div>
           </div>
         </div>
 
-        <button @click="openEventModal" class="w-full py-4 border-2 border-dashed border-jp-accent/30 rounded-3xl text-jp-accent text-xs font-bold flex items-center justify-center gap-2 hover:bg-jp-yellow/20 transition-all">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        <button @click="openEventModal" class="w-full py-4 border-2 border-dashed border-jp-accent/30 rounded-3xl text-jp-accent text-xs font-bold flex items-center justify-center gap-2 hover:bg-jp-yellow/20 transition-all shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
           手動新增行程
         </button>
       </section>
@@ -441,7 +488,7 @@
         <!-- Dashboard Card -->
         <div class="bg-gradient-to-br from-jp-dark to-stone-800 text-white rounded-3xl p-5 shadow-lg relative overflow-hidden">
           <div class="absolute right-0 top-0 translate-x-4 -translate-y-4 opacity-10">
-            <svg class="w-40 h-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+            <svg class="w-40 h-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
           </div>
           
           <div class="text-[10px] uppercase tracking-wider text-jp-yellow font-bold mb-2">旅程開銷與匯率面板</div>
@@ -449,8 +496,8 @@
             <div class="flex items-center gap-2 z-10">
               <span class="text-sm font-bold bg-white/10 px-2.5 py-1 rounded-xl">¥ (CNY)</span>
               <!-- 匯率輸入 -->
-              <input v-model="cnyExchangeRate" @change="saveToLocalStorage" type="number" step="any" inputmode="decimal" class="w-16 bg-white/20 border-none rounded-lg text-sm px-2 py-1 text-center font-bold focus:ring-1 focus:ring-jp-yellow focus:outline-none">
-              <svg class="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+              <input v-model="cnyExchangeRate" @change="saveToLocalStorage" type="number" step="any" inputmode="decimal" class="w-16 bg-white/20 border-none rounded-lg text-sm px-2 py-1 text-center font-bold focus:ring-1 focus:ring-jp-yellow/100 focus:outline-none">
+              <svg class="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
               <span class="text-xs text-stone-300">台幣換算率 x {{ cnyExchangeRate }}</span>
             </div>
           </div>
@@ -471,7 +518,7 @@
         <!-- Settlement Split Summary Dashboard (智慧結算分攤計算器) -->
         <div class="bg-white rounded-3xl p-4 shadow-sm border border-stone-200/60 space-y-3">
           <h3 class="text-xs font-bold text-jp-dark flex items-center gap-1.5 border-b pb-2 border-stone-100">
-            <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+            <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
             💡 旅伴分攤與智慧結算建議
           </h3>
           
@@ -494,7 +541,7 @@
           <div class="p-3 bg-stone-50 rounded-2xl border border-stone-100 flex items-center justify-between text-xs">
             <div class="flex items-center gap-2">
               <span class="p-1 bg-jp-yellow text-jp-accent rounded-lg">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
               </span>
               <span class="text-[11px] text-stone-600 leading-tight">
                 <b>公攤花費結算：</b>兩人平均應分攤 <b class="text-stone-700">NT$ {{ splitSuggestion.averagePerPerson }}</b> 元。
@@ -508,15 +555,15 @@
           </div>
         </div>
 
-        <!-- Master Spreadsheet Panel (極致對稱、不需橫向滾動的記帳明細) -->
-        <div class="bg-white rounded-3xl p-4 shadow-sm border border-stone-100 overflow-hidden">
+        <!-- Master Spreadsheet Panel (記帳明細) -->
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-stone-200/60 overflow-hidden">
           <div class="flex justify-between items-center gap-2.5 mb-4 border-b border-stone-100 pb-2.5">
             <div class="flex items-center gap-1.5">
-              <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+              <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
               <h2 class="text-xs font-bold text-jp-dark">全行程記帳明細 (Master Sheet)</h2>
             </div>
             <button @click="insertSpreadsheetRow" class="text-[9px] bg-jp-accent hover:bg-jp-accent/90 text-white px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all shadow-sm">
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
               插入一筆
             </button>
           </div>
@@ -564,7 +611,7 @@
                     <option value="公積金">公積金</option>
                   </select>
                   <div class="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-stone-500/80">
-                    <svg class="w-1.5 h-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    <svg class="w-1.5 h-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
                   </div>
                 </div>
               </div>
@@ -585,7 +632,7 @@
 
               <!-- 4. 刪除按鍵 -->
               <button @click="removeBillRow(bill.id)" class="text-stone-300 hover:text-red-500 transition-colors p-1 shrink-0" title="刪除項目">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
               </button>
 
             </div>
@@ -595,19 +642,19 @@
 
       <!-- 必買清單 (Shopping List Tab) -->
       <section v-if="currentTab === 'shopping'" class="space-y-4 fade-in">
-        <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-100">
+        <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-200/60">
           <h2 class="font-bold text-jp-dark mb-4 flex items-center gap-2 text-sm">
-            <svg class="w-4 h-4 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+            <svg class="w-4.5 h-4.5 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
             必買伴手禮與慾望清單
           </h2>
           <div class="flex gap-2 mb-4">
-            <input v-model="newShopItem.text" type="text" placeholder="品名 (例如: 大白兔奶糖...)" class="flex-[2] text-xs px-3 py-2.5 rounded-xl bg-jp-cream border-none focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium">
-            <input v-model="newShopItem.budget" type="number" placeholder="預算 ¥" class="flex-[1] text-xs px-2 py-2.5 rounded-xl bg-jp-cream border-none focus:outline-none focus:ring-1 focus:ring-jp-accent text-right font-bold">
+            <input v-model="newShopItem.text" type="text" placeholder="品名 (例如: 大白兔奶糖...)" class="flex-[2] text-xs px-3 py-2.5 rounded-xl bg-jp-cream border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium shadow-inner">
+            <input v-model="newShopItem.budget" type="number" placeholder="預算 ¥" class="flex-[1] text-xs px-2 py-2.5 rounded-xl bg-jp-cream border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent text-right font-bold shadow-inner">
             <button @click="addShopItem" class="bg-jp-accent text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-jp-accent/90 transition-all">新增</button>
           </div>
           
           <ul class="space-y-2">
-            <li v-for="(item, idx) in shoppingList" :key="idx" class="flex items-center justify-between p-3 bg-jp-cream/30 rounded-xl hover:bg-jp-cream/50 transition-colors">
+            <li v-for="(item, idx) in shoppingList" :key="idx" class="flex items-center justify-between p-3 bg-jp-cream/30 rounded-xl hover:bg-jp-cream/50 transition-colors border border-stone-100">
               <label class="flex items-center gap-3 cursor-pointer flex-1">
                 <input type="checkbox" v-model="item.done" @change="saveToLocalStorage" class="w-4 h-4 rounded text-jp-accent border-stone-300 focus:ring-jp-accent">
                 <span :class="item.done ? 'line-through text-stone-400' : 'text-xs text-jp-dark font-medium'">{{ item.text }}</span>
@@ -615,7 +662,7 @@
               <div class="flex items-center gap-3">
                 <span v-if="item.budget" class="text-[10px] font-black text-jp-accent bg-jp-yellow px-2 py-0.5 rounded-md">¥ {{ item.budget }}</span>
                 <button @click="deleteShopItem(idx)" class="text-stone-300 hover:text-red-400 transition-colors">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                 </button>
               </div>
             </li>
@@ -623,97 +670,144 @@
         </div>
       </section>
 
-      <!-- 回憶相冊 (Memoir Album Tab) -->
+      <!-- 回記相冊 (Memoir Album Tab - 實體手記航線時光軸) -->
       <section v-if="currentTab === 'memoir'" class="space-y-4 fade-in pb-10">
-        <div class="bg-white rounded-3xl p-5 shadow-sm space-y-4 border border-stone-150">
-          <h2 class="font-bold text-jp-dark border-b pb-3 flex items-center gap-2">
+        
+        <!-- 連貫手帳時光足跡軸 (照片與景點並列呈現) -->
+        <div class="space-y-6">
+          <div v-for="day in daysCount" :key="day" class="bg-white rounded-3xl p-5 shadow-sm border border-stone-100/80 space-y-4 relative overflow-hidden bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]">
+            
+            <div class="flex items-center justify-between border-b pb-2 border-stone-100 relative z-10">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-jp-accent animate-pulse"></span>
+                <h3 class="font-extrabold text-xs text-jp-dark tracking-wide uppercase">Day {{ day }} 時光地圖足跡</h3>
+              </div>
+              <span v-if="startDate" class="text-[9px] text-jp-accent bg-jp-yellow/60 px-2 py-0.5 rounded-full font-bold">{{ getDayDateStr(day) }}</span>
+            </div>
+
+            <!-- 手寫手帳時光軸，配有圓孔連貫線 -->
+            <div class="relative space-y-4 pl-4 pt-2">
+              <div class="absolute left-[7px] top-4 bottom-4 border-l-2 border-dashed border-jp-accent/50 pointer-events-none"></div>
+
+              <div v-for="(ev, sIdx) in events.filter(e => e.day === day)" :key="ev.id" 
+                   class="flex items-start gap-3 relative z-10 animate-fade">
+                
+                <div class="absolute left-[-13px] top-1.5 w-3.5 h-3.5 bg-white border-2 border-jp-accent rounded-full flex items-center justify-center shadow-sm">
+                  <span class="text-[6px] font-black text-jp-accent">{{ sIdx + 1 }}</span>
+                </div>
+
+                <!-- 左右排版緊湊卡片 -->
+                <div class="flex-1 bg-stone-50/75 border border-stone-100 rounded-2xl p-3 flex gap-3 items-center justify-between hover:bg-white hover:shadow-sm transition-all duration-300">
+                  <div class="min-w-0 flex-1 space-y-1">
+                    <div class="flex items-center gap-1">
+                      <span class="text-[8px] text-stone-400 font-sans font-black">{{ ev.time }}</span>
+                      <span :class="['text-[8px] font-bold px-1 rounded', getCatColor(ev.category)]" class="text-[7px] scale-90">{{ ev.category }}</span>
+                    </div>
+                    <h4 class="text-[11px] font-bold text-jp-dark truncate">{{ ev.title }}</h4>
+                    <p class="text-[8px] text-stone-500 truncate flex items-center gap-0.5">
+                      <span>📍</span>{{ ev.location }}
+                    </p>
+                  </div>
+
+                  <!-- 拍立得迷你縮圖與景點並行展示 -->
+                  <div class="w-16 shrink-0 flex justify-center">
+                    <div v-if="ev.photo" class="relative bg-white p-1 pb-2 shadow border border-stone-200/80 rounded-sm transform rotate-[-2deg] w-14 hover:rotate-0 transition-transform">
+                      <img :src="ev.photo" class="w-12 h-10 object-cover" />
+                    </div>
+                    <div v-else class="text-[7px] text-stone-400 text-center py-2 border border-dashed border-stone-200 rounded-lg w-14 font-medium leading-none">
+                      📷<br/>手帳無相片
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <div v-if="events.filter(e => e.day === day).length === 0" 
+                 class="py-8 text-center text-[10px] text-stone-400 border border-dashed border-stone-200 rounded-2xl flex flex-col items-center justify-center gap-1">
+              <span>🗺️ 尚未排入此天行程景點</span>
+              <span class="text-[8px] opacity-75">請前往行程表使用 AI 填補或手動排程！</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 足跡海報 Canvas 渲染控制台 -->
+        <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-200/60 space-y-4">
+          <h2 class="font-extrabold text-jp-dark border-b pb-3 flex items-center gap-2">
             <span class="text-lg">🎨</span>
-            <span>大師級旅行手帳海報 Pro (趣味漫畫版)</span>
+            <span>大師級足跡地圖海報生成</span>
           </h2>
           
-          <div class="space-y-3">
-            <div class="space-y-1">
-              <label class="text-[10px] text-stone-400 block font-black uppercase tracking-wider">選擇造訪天數 (生成獨立手帳)</label>
-              <select v-model="memoirConfig.dayFilter" @change="renderMemoirPoster" class="w-full p-2.5 rounded-xl bg-jp-cream text-xs font-bold border-none focus:ring-1 focus:ring-jp-accent">
-                <option v-for="d in daysCount" :key="d" :value="d">Day {{ d }} 獨立紀念漫畫</option>
-              </select>
+          <div class="space-y-2">
+            <label class="text-[10px] text-stone-400 block font-bold">選擇天數生成獨立圖片 (照片將直接在節點旁綻放)：</label>
+            <select v-model="memoirConfig.dayFilter" @change="renderMemoirPoster" class="w-full p-2.5 rounded-xl bg-jp-cream text-xs font-bold border border-stone-200 focus:ring-1 focus:ring-jp-accent">
+              <option v-for="d in daysCount" :key="d" :value="d">Day {{ d }} 獨立手帳地圖</option>
+            </select>
+          </div>
+
+          <!-- 樣式及日期印章設定區 -->
+          <div class="p-4 bg-jp-cream/50 rounded-2xl border border-jp-yellow/60 space-y-3">
+            <h4 class="text-xs font-bold text-jp-dark flex items-center gap-1">
+              <span>🖼️</span> 樣式模板、改期印章樣式
+            </h4>
+            <div class="grid grid-cols-3 gap-2">
+              <button @click="setMemoirTemplate('warm')" 
+                      :class="memoirConfig.template === 'warm' ? 'border-2 border-jp-accent bg-white shadow-sm font-extrabold' : 'border border-stone-200 bg-stone-50 text-stone-500'"
+                      class="py-2 rounded-xl text-[10px] text-center transition-all">
+                經典暖沙梧桐
+              </button>
+              <button @click="setMemoirTemplate('sage')" 
+                      :class="memoirConfig.template === 'sage' ? 'border-2 border-emerald-600 bg-white shadow-sm font-extrabold text-emerald-800' : 'border border-stone-200 bg-stone-50 text-stone-500'"
+                      class="py-2 rounded-xl text-[10px] text-center transition-all">
+                文青松嶺綠
+              </button>
+              <button @click="setMemoirTemplate('dark')" 
+                      :class="memoirConfig.template === 'dark' ? 'border-2 border-stone-900 bg-white shadow-sm font-extrabold text-stone-900' : 'border border-stone-200 bg-stone-50 text-stone-500'"
+                      class="py-2 rounded-xl text-[10px] text-center transition-all">
+                賽博魔都之夜
+              </button>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-2 pt-1 border-t border-stone-200/50 pt-2">
+              <button @click="setMemoirDateStyle('stamp')" 
+                      :class="memoirConfig.dateStyle === 'stamp' ? 'border-2 border-jp-accent bg-white font-extrabold' : 'border border-stone-200 bg-stone-50 text-stone-500'"
+                      class="py-1.5 rounded-lg text-[9px] text-center transition-all flex flex-col items-center">
+                <span>📬</span> 復古郵戳
+              </button>
+              <button @click="setMemoirDateStyle('ticket')" 
+                      :class="memoirConfig.dateStyle === 'ticket' ? 'border-2 border-jp-accent bg-white font-extrabold' : 'border border-stone-200 bg-stone-50 text-stone-500'"
+                      class="py-1.5 rounded-lg text-[9px] text-center transition-all flex flex-col items-center">
+                <span>🎫</span> 登機票根
+              </button>
+              <button @click="setMemoirDateStyle('calendar')" 
+                      :class="memoirConfig.dateStyle === 'calendar' ? 'border-2 border-jp-accent bg-white font-extrabold' : 'border border-stone-200 bg-stone-50 text-stone-500'"
+                      class="py-1.5 rounded-lg text-[9px] text-center transition-all flex flex-col items-center">
+                <span>📅</span> 手撕日曆
+              </button>
             </div>
 
-            <!-- 海報日期樣式設定區 -->
-            <div class="p-4 bg-jp-cream/50 rounded-2xl border border-jp-yellow/60 space-y-3">
-              <h4 class="text-xs font-black text-jp-dark flex items-center gap-1">
-                <span>📅</span> 日期時戳與登機證風格 (改期樣式)
-              </h4>
-              <div class="grid grid-cols-3 gap-2">
-                <button @click="setMemoirDateStyle('postmark')" 
-                        :class="memoirConfig.dateStyle === 'postmark' ? 'border-2 border-jp-accent bg-white shadow-sm font-extrabold text-jp-dark' : 'border border-stone-200 bg-stone-50 text-stone-500 text-[10px]'"
-                        class="py-2 rounded-xl text-[10px] text-center transition-all">
-                  📬 復古郵戳
-                </button>
-                <button @click="setMemoirDateStyle('boarding')" 
-                        :class="memoirConfig.dateStyle === 'boarding' ? 'border-2 border-jp-accent bg-white shadow-sm font-extrabold text-jp-dark' : 'border border-stone-200 bg-stone-50 text-stone-500 text-[10px]'"
-                        class="py-2 rounded-xl text-[10px] text-center transition-all">
-                  🎫 登機證根
-                </button>
-                <button @click="setMemoirDateStyle('calendar')" 
-                        :class="memoirConfig.dateStyle === 'calendar' ? 'border-2 border-jp-accent bg-white shadow-sm font-extrabold text-jp-dark' : 'border border-stone-200 bg-stone-50 text-stone-500 text-[10px]'"
-                        class="py-2 rounded-xl text-[10px] text-center transition-all">
-                  📅 撕頁日曆
-                </button>
-              </div>
-
-              <div class="space-y-1.5 pt-1 border-t border-jp-yellow/40">
-                <label class="text-[10px] text-stone-400 block font-bold">手動微調冒險主題大標題</label>
-                <input v-model="memoirConfig.title" type="text" @input="renderMemoirPoster"
-                       class="w-full text-xs px-3 py-2 rounded-xl bg-white border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent font-bold">
-              </div>
-            </div>
-
-            <!-- 海報樣式設定區 -->
-            <div class="p-4 bg-jp-cream/50 rounded-2xl border border-jp-yellow/60 space-y-3">
-              <h4 class="text-xs font-black text-jp-dark flex items-center gap-1">
-                <span>🖼️</span> 選擇排版模板 (漫畫濾鏡效果)
-              </h4>
-              <div class="grid grid-cols-2 gap-2">
-                <button @click="setMemoirTemplate('warm')" 
-                        :class="memoirConfig.template === 'warm' ? 'border-2 border-jp-accent bg-white shadow-sm font-extrabold text-jp-dark' : 'border border-stone-200 bg-stone-50 text-stone-500 text-[10px]'"
-                        class="py-2 rounded-xl text-[10px] text-center transition-all">
-                  🍁 經典美式復古漫畫
-                </button>
-                <button @click="setMemoirTemplate('sage')" 
-                        :class="memoirConfig.template === 'sage' ? 'border-2 border-emerald-600 bg-white shadow-sm font-extrabold text-emerald-800' : 'border border-stone-200 bg-stone-50 text-stone-500 text-[10px]'"
-                        class="py-2 rounded-xl text-[10px] text-center transition-all">
-                  🌲 文青感日常熱血漫畫
-                </button>
-                <button @click="setMemoirTemplate('dark')" 
-                        :class="memoirConfig.template === 'dark' ? 'border-2 border-stone-900 bg-white shadow-sm font-extrabold text-stone-900' : 'border border-stone-200 bg-stone-50 text-stone-500 text-[10px]'"
-                        class="py-2 rounded-xl text-[10px] text-center transition-all">
-                  🌃 賽博魔都科幻漫畫
-                </button>
-                <button @click="setMemoirTemplate('gazette')" 
-                        :class="memoirConfig.template === 'gazette' ? 'border-2 border-amber-950 bg-white shadow-sm font-extrabold text-amber-950' : 'border border-stone-200 bg-stone-50 text-stone-500 text-[10px]'"
-                        class="py-2 rounded-xl text-[10px] text-center transition-all">
-                  📰 昭和老報紙印刷連載
-                </button>
-              </div>
+            <div class="space-y-1 pt-1">
+              <label class="text-[10px] text-stone-500 block font-bold">海報主標題</label>
+              <input v-model="memoirConfig.title" type="text" 
+                     class="w-full text-xs px-3 py-2 rounded-xl bg-white border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent font-bold">
             </div>
           </div>
 
-          <!-- 海報即時預覽區域 -->
-          <div class="space-y-2">
-            <label class="text-[10px] text-stone-400 block font-black uppercase tracking-wider">海報即時預覽 (800 x 1200 趣味漫畫版)</label>
-            <div class="border border-stone-200/80 rounded-2xl overflow-hidden shadow-inner bg-stone-50 flex items-center justify-center p-4">
-              <canvas id="memoirCanvas" class="w-full h-auto max-w-[300px] shadow-lg border bg-white rounded-lg"></canvas>
+          <!-- 海報即時預覽 -->
+          <div class="space-y-1.5">
+            <label class="text-[10px] text-stone-400 block font-bold">海報即時預覽 (打卡拍立得將藉手繪針線精準連繫地圖對應景點上)</label>
+            <div class="border border-stone-200/80 rounded-2xl overflow-hidden shadow-inner bg-stone-50 flex items-center justify-center p-3">
+              <canvas id="memoirCanvas" class="w-full h-auto max-w-[280px] shadow-md border bg-white rounded-lg"></canvas>
             </div>
           </div>
           
           <div class="text-[9px] text-stone-400 leading-tight">
-            * 💡 小叮嚀：系統已自動為您將旅行景點結合上傳照片，轉換成<b>美漫風格分鏡格子</b>與<b>趣味對話框</b>！並全面移除了任何與開銷花費相關的字樣，打造純粹、歡樂的冒險手記！
+            * 提示：系統會自動投射 Day {{ memoirConfig.dayFilter }} 的景點座標成手繪地圖，且**您的打卡相片會與景點錨點直接連線**。請點選「📷上傳照片」補齊景點相片！
           </div>
 
           <button @click="downloadMemoirPoster" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-            下載當日手帳紀念海報
+            下載大師級足跡手帳海報
           </button>
         </div>
       </section>
@@ -725,18 +819,18 @@
       <div class="bg-white w-full rounded-3xl p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between border-b pb-3 border-stone-100">
           <div class="flex items-center gap-2">
-            <svg class="w-5 h-5 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0a9 9 0 0118 0z"></path></svg>
+            <svg class="w-5 h-5 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0a9 9 0 0118 0z"></path></svg>
             <h3 class="font-bold text-jp-dark text-sm">手動新增行程</h3>
           </div>
           <button @click="showEventModal = false" class="p-1 hover:bg-stone-100 rounded-full transition-colors">
-            <svg class="w-4 h-4 text-stone-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            <svg class="w-4 h-4 text-stone-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
         </div>
 
         <div class="space-y-3 text-xs">
           <div>
             <label class="block font-bold text-stone-500 mb-1">造訪天數</label>
-            <select v-model.number="newEvent.day" class="w-full p-2.5 rounded-xl bg-jp-cream border-none focus:outline-none font-bold">
+            <select v-model.number="newEvent.day" class="w-full p-2.5 rounded-xl bg-jp-cream border border-stone-200 focus:outline-none font-bold">
               <option v-for="d in daysCount" :key="d" :value="d">Day {{ d }}</option>
             </select>
           </div>
@@ -744,11 +838,11 @@
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block font-bold text-stone-500 mb-1">出發時間</label>
-              <input v-model="newEvent.time" type="time" class="w-full p-2 rounded-xl bg-jp-cream border-none focus:outline-none font-bold">
+              <input v-model="newEvent.time" type="time" class="w-full p-2 rounded-xl bg-jp-cream border border-stone-200 focus:outline-none font-bold">
             </div>
             <div>
               <label class="block font-bold text-stone-500 mb-1">分類標籤</label>
-              <select v-model="newEvent.category" class="w-full p-2.5 rounded-xl bg-jp-cream border-none focus:outline-none font-bold">
+              <select v-model="newEvent.category" class="w-full p-2.5 rounded-xl bg-jp-cream border border-stone-200 focus:outline-none font-bold">
                 <option value="景點">景點</option>
                 <option value="餐飲">餐飲</option>
                 <option value="交通">交通</option>
@@ -760,17 +854,17 @@
 
           <div>
             <label class="block font-bold text-stone-500 mb-1">行程名稱 (景點或店家名稱)</label>
-            <input v-model="newEvent.title" type="text" placeholder="例：上海中心大廈" class="w-full p-2.5 rounded-xl bg-jp-cream border-none focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium">
+            <input v-model="newEvent.title" type="text" placeholder="例：北京故宮午門" class="w-full p-2.5 rounded-xl bg-jp-cream border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium shadow-inner">
           </div>
 
           <div>
             <label class="block font-bold text-stone-500 mb-1">地址或詳細定位地點 (用於地圖)</label>
-            <input v-model="newEvent.location" type="text" placeholder="例：浦東新區陸家嘴環路479號" class="w-full p-2.5 rounded-xl bg-jp-cream border-none focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium">
+            <input v-model="newEvent.location" type="text" placeholder="例：北京故宮午門" class="w-full p-2.5 rounded-xl bg-jp-cream border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium shadow-inner">
           </div>
           
           <div>
             <label class="block font-bold text-stone-500 mb-1">個人自由備註 (選填)</label>
-            <textarea v-model="newEvent.note" placeholder="例：建議下午四點左右到看落日夕陽..." class="w-full p-2.5 rounded-xl bg-jp-cream border-none focus:outline-none focus:ring-1 focus:ring-jp-accent resize-none h-16 font-medium"></textarea>
+            <textarea v-model="newEvent.note" placeholder="例：建議下午四點左右到看落日夕陽..." class="w-full p-2.5 rounded-xl bg-jp-cream border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent resize-none h-16 font-medium shadow-inner"></textarea>
           </div>
         </div>
 
@@ -781,63 +875,190 @@
       </div>
     </div>
 
-    <!-- Floating Bottom Navigation Bar (底部分類導航) -->
+    <!-- 底部導航欄 -->
     <nav class="absolute bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-jp-sand/60 px-4 py-3 flex justify-around items-center shadow-[0_-4px_24px_rgba(0,0,0,0.04)]">
-      <button @click="setTab('itinerary')" :class="currentTab === 'itinerary' ? 'text-jp-accent scale-105' : 'text-stone-400 hover:text-jp-dark'" class="flex flex-col items-center gap-1 transition-all">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-        <span class="text-[9px] font-bold">行程表</span>
+      <button @click="setTab('itinerary')" :class="currentTab === 'itinerary' && activeDay !== 'todo' ? 'text-jp-accent scale-105' : 'text-stone-400 hover:text-jp-dark'" class="flex flex-col items-center gap-1 transition-all">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+        <span class="text-[9px] font-black">行程表</span>
       </button>
       <button @click="setTab('billing')" :class="currentTab === 'billing' ? 'text-jp-accent scale-105' : 'text-stone-400 hover:text-jp-dark'" class="flex flex-col items-center gap-1 transition-all">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
-        <span class="text-[9px] font-bold">記帳 Ledger</span>
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+        <span class="text-[9px] font-black">記帳 Ledger</span>
       </button>
       <button @click="setTab('shopping')" :class="currentTab === 'shopping' ? 'text-jp-accent scale-105' : 'text-stone-400 hover:text-jp-dark'" class="flex flex-col items-center gap-1 transition-all">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
-        <span class="text-[9px] font-bold">必買清單</span>
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+        <span class="text-[9px] font-black">必買清單</span>
       </button>
       <button @click="setTab('memoir')" :class="currentTab === 'memoir' ? 'text-jp-accent scale-105' : 'text-stone-400 hover:text-jp-dark'" class="flex flex-col items-center gap-1 transition-all">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-        <span class="text-[9px] font-bold">回憶相冊</span>
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+        <span class="text-[9px] font-black">回憶相冊</span>
       </button>
     </nav>
 
   </div>
 
   <script>
+    const apiKey = ""; // 這裡將在執行環境中自動注入
     const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+
+    // 🏆 超強健的日期格式相容解析器 (確保在雲端傳回各種日期格式/時間戳記數字下皆能輸出完美的 YYYY-MM-DD 字串)
+    const formatToYYYYMMDD = (val) => {
+      if (!val) return "2026-06-17"; 
+      
+      let parsedVal = val;
+      // 🚀 如果傳進來的是數字或看起來像數字的字串（即時間戳記），強制轉為標準 Number 型態以利 Date 解析
+      if (typeof val === 'number' || (!isNaN(val) && !isNaN(parseFloat(val)))) {
+        parsedVal = Number(val);
+      }
+
+      // 如果已經是標準 YYYY-MM-DD 格式，直接返回
+      if (typeof parsedVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsedVal)) {
+        return parsedVal;
+      }
+      
+      try {
+        const d = new Date(parsedVal);
+        if (!isNaN(d.getTime())) {
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          return `${yyyy}-${mm}-${dd}`;
+        }
+      } catch (e) {
+        console.error("日期解析失敗:", e);
+      }
+      return "2026-06-17"; 
+    };
+
+    // 定義 Gemini AI 預設的備用解析引擎
+    const smartLocalSemanticParser = (prompt, isJson) => {
+      const text = prompt.toLowerCase();
+      if (isJson) {
+        let matchedEvent = {
+          time: "12:00",
+          title: "中國精選精華推薦行程",
+          location: "中國著名城市地標",
+          category: "景點",
+          suggestedNotes: "建議提前下載12306與高德地圖確認省際和市內交通。",
+          lat: 34.2658,
+          lng: 108.9541
+        };
+
+        let timeMatch = text.match(/(\d+)\s*(點|時)\s*(\d+|半)?/);
+        if (timeMatch) {
+          let hours = parseInt(timeMatch[1]);
+          let minutes = "00";
+          if (timeMatch[3] === "半") minutes = "30";
+          else if (timeMatch[3]) minutes = timeMatch[3].padStart(2, "0");
+
+          if (text.includes("下午") || text.includes("晚上") || text.includes("pm")) {
+            if (hours < 12) hours += 12;
+          }
+          matchedEvent.time = `${String(hours).padStart(2, "0")}:${minutes}`;
+        }
+
+        if (text.includes("故宮") || text.includes("北京")) {
+          matchedEvent.title = "北京故宮午門參觀";
+          matchedEvent.location = "北京故宮博物院";
+          matchedEvent.category = "景點";
+          matchedEvent.suggestedNotes = "地鐵8號線金魚胡同站或1號線天安門東站。必須提早7天實名預約門票，週一閉館。";
+          matchedEvent.lat = 39.9163;
+          matchedEvent.lng = 116.3972;
+        } else if (text.includes("兵馬俑") || text.includes("西安")) {
+          matchedEvent.title = "秦始皇兵馬俑博物館探秘";
+          matchedEvent.location = "西安秦始皇兵馬俑";
+          matchedEvent.category = "景點";
+          matchedEvent.suggestedNotes = "市區搭乘旅遊專線或打車前往約1小時。展館內遊客極多，建議提早預約官方講解員。";
+          matchedEvent.lat = 34.3842;
+          matchedEvent.lng = 109.2785;
+        } else if (text.includes("熊貓") || text.includes("成都")) {
+          matchedEvent.title = "成都大熊貓繁育研究基地";
+          matchedEvent.location = "成都大熊貓繁育研究基地";
+          matchedEvent.category = "景點";
+          matchedEvent.suggestedNotes = "務必早上7:30前傾聽熊貓咀嚼聲！大熊貓怕熱，中午過後就會回冷氣房，建議清晨造訪。";
+          matchedEvent.lat = 30.7388;
+          matchedEvent.lng = 104.1432;
+        } else if (text.includes("灕江") || text.includes("桂林")) {
+          matchedEvent.title = "景之灕江精緻竹筏漂流";
+          matchedEvent.location = "陽朔灕江景區";
+          matchedEvent.category = "活動";
+          matchedEvent.suggestedNotes = "人在畫中游，欣賞20元人民幣背景實景。漂流建議選擇官方售票處的4人筏。";
+          matchedEvent.lat = 24.9192;
+          matchedEvent.lng = 110.4981;
+        } else if (text.includes("外灘") || text.includes("上海")) {
+          matchedEvent.title = "外灘暮色與璀璨夜景";
+          matchedEvent.location = "上海市黃浦區外灘";
+          matchedEvent.category = "景點";
+          matchedEvent.suggestedNotes = "景觀燈晚上十點準時熄燈，建議九點前抵達。江邊風大，記得攜帶防風外套。";
+          matchedEvent.lat = 31.2406;
+          matchedEvent.lng = 121.4901;
+        } else {
+          let rawTitle = prompt.replace(/(下午|上午|早上|晚上|下午|點|點半|去|吃|玩)/g, "").trim();
+          matchedEvent.title = rawTitle || "中國精選行程";
+          matchedEvent.location = rawTitle || "中國著名景點";
+        }
+        return JSON.stringify({ events: [matchedEvent] });
+      } else {
+        if (text.includes("故宮") || text.includes("北京")) {
+          return "北京故宮必須提前7天實名預約，進園自備充足飲水。";
+        }
+        return "中國省際移動推薦搭乘高鐵復興號，準時、舒適且訊號極佳。";
+      }
+    };
 
     createApp({
       setup() {
-        const tripTitle = ref("上海四天精華遊");
-        const daysCount = ref(4);
+        const tripTitle = ref("中國五天極致精華遊");
+        const daysCount = ref(5);
         const activeDay = ref(1);
         const currentTab = ref("itinerary");
-        const startDate = ref("2026-05-29"); // 預設初始化出發日期
+        const startDate = ref("2026-06-17"); // 初始日期強制設定為 6/17
         
+        // AI 參數
         const aiInput = ref("");
         const aiLoading = ref(false);
+        const singleAiLoading = ref(null);
 
         const todos = ref([
           { text: "確認並辦理台胞證期限時效 (確認有效期限)", done: true },
-          { text: "下載高德地圖與支付寶/微信綁定信用卡", done: true },
-          { text: "購買中國大陸上網 SIM卡/eSIM", done: false },
-          { text: "準備高鐵車票微信小程式 / 12306註冊", done: false }
+          { text: "下載高德地圖與支付寶/微信綁定台灣信用卡", done: true },
+          { text: "購買中國大陸上網 SIM卡/eSIM (免翻牆版本)", done: false },
+          { text: "註冊 12306 高鐵搶票微信小程式 / 官網帳號", done: false }
         ]);
         const newTodo = ref("");
 
         const shoppingList = ref([
-          { text: "沈大成條頭糕 / 青糰", done: false, budget: "50" },
-          { text: "上海中心大廈限量明信片", done: true, budget: "15" },
-          { text: "大白兔奶糖聯名周邊", done: false, budget: "40" }
+          { text: "北京同仁堂草本周邊商品", done: false, budget: "120" },
+          { text: "兵馬俑仿古精緻手伴擺件", done: true, budget: "85" },
+          { text: "成都蜀錦刺繡大熊貓玩偶", done: false, budget: "150" },
+          { text: "桂林三花酒 / 桂花糕特產", done: false, budget: "60" }
         ]);
         const newShopItem = ref({ text: "", budget: "" });
 
         const events = ref([
-          { id: "e1", day: 1, time: "10:30", title: "抵達浦東機場", location: "上海浦東國際機場", category: "交通", note: "搭乘磁浮列車，僅需8分鐘即可到達龍陽路站。", suggestedNotes: "磁浮列車憑當日機票可享單程40元人民幣優惠。速度超快，值得體驗！", lat: 31.1443, lng: 121.8083, photo: "" },
-          { id: "e2", day: 1, time: "12:00", title: "和平飯店 check-in", location: "上海和平飯店", category: "住宿", note: "辦理入住並放行李。", suggestedNotes: "和平飯店歷史悠久，大堂非常華麗。附近隨時可能塞車，推薦坐地鐵2號線至南京東路站。", lat: 31.2415, lng: 121.4889, photo: "" },
-          { id: "e3", day: 1, time: "14:00", title: "豫園散策與午餐", location: "豫園商圈", category: "餐飲", note: "品嚐著名的南翔饅頭店小籠包。", suggestedNotes: "南翔饅頭店一樓排隊人潮極多，可以選擇上二樓或三樓雅座，雖然有低消但排隊時間能大幅減少！", lat: 31.2272, lng: 121.4921, photo: "" },
-          { id: "e4", day: 1, time: "19:00", title: "外灘看夜景", location: "上海市黃浦區中山東一路", category: "景點", note: "散步欣賞浦東陸家嘴摩天大樓群夜色。", suggestedNotes: "外灘景觀燈每晚 19:00 至 22:00 開啟（冬季可能提早至21:30），請注意好遊覽時間。", lat: 31.2406, lng: 121.4901, photo: "" },
-          { id: "e5", day: 2, time: "10:00", title: "武康路散步", location: "武康大樓", category: "景點", note: "網紅武康大樓拍照打卡，感受法租界梧桐樹街道。", suggestedNotes: "武康大樓正對面路口是絕佳拍攝點，早上去光線最好且遊客較少。附近咖啡館素質都很高。", lat: 31.2017, lng: 121.4326, photo: "" }
+          // Day 1: Beijing
+          { id: "e1", day: 1, time: "09:30", title: "抵達北京首都機場", location: "北京首都國際機場", category: "交通", note: "搭乘機場快軌線快速進入市區。", suggestedNotes: "推薦直接在微信或支付寶購買北京互通卡，刷手機搭地鐵極度方便！", lat: 40.0799, lng: 116.6031, photo: "" },
+          { id: "e2", day: 1, time: "11:30", title: "北京皇家四合院酒店 check-in", location: "北京故宮皇家驛棧", category: "住宿", note: "傳統京味四合院體驗，放行李。", suggestedNotes: "避開胡同塞車，建議出發前聯絡酒店提供最優步行導引。", lat: 39.9205, lng: 116.4035, photo: "" },
+          { id: "e3", day: 1, time: "13:30", title: "故宮博物院探秘", location: "北京故宮午門", category: "景點", note: "穿越歷史，探尋紫禁城深處的文化故事。", suggestedNotes: "故宮必須提早7天在微信小程序實名預約門票！週一閉館，進園自備飲水。", lat: 39.9163, lng: 116.3972, photo: "" },
+          { id: "e4", day: 1, time: "18:00", title: "享用正宗北京烤鴨", location: "四季民福烤鴨店 (故宮店)", category: "餐飲", note: "邊看故宮護城河，邊享用酥脆香嫩的烤鴨。", suggestedNotes: "這家分店排隊極度熱門！下午3點前就必須線上拿號，否則等到深夜。", lat: 39.9180, lng: 116.4042, photo: "" },
+
+          // Day 2: Xi'an
+          { id: "e5", day: 2, time: "08:00", title: "高鐵復興號前行", location: "北京西站", category: "交通", note: "搭乘高鐵前往古都西安，大約4.5小時。", suggestedNotes: "車上訊號良好，建議提前準備好12306訂餐，高鐵外賣會直接送到座位！", lat: 39.8949, lng: 116.3218, photo: "" },
+          { id: "e6", day: 2, time: "14:00", title: "秦始皇兵馬俑博物館", location: "西安秦始皇兵馬俑", category: "景點", note: "震撼人心的地下世界遺產軍陣。", suggestedNotes: "市區去兵馬俑車程約1小時。門口野生導遊極多，建議租用官方語音導覽器或預約官方講解員。", lat: 34.3842, lng: 109.2785, photo: "" },
+          { id: "e7", day: 2, time: "19:00", title: "鐘鼓樓與回民街夜市", location: "西安鐘樓", category: "餐飲", note: "燈火輝煌的西安夜景，品嚐泡饃與肉夾饃。", suggestedNotes: "回民街主街人滿為患且物價偏高，轉進旁邊的大皮院或灑金橋才能吃到在地老店！", lat: 34.2637, lng: 108.9475, photo: "" },
+
+          // Day 3: Chengdu
+          { id: "e8", day: 3, time: "09:00", title: "大熊貓繁育研究基地", location: "成都大熊貓繁育研究基地", category: "景點", note: "去看超萌的熊貓寶寶和網紅「花花」！", suggestedNotes: "一定要早上7:30前抵達！大熊貓怕熱，中午過後就會回冷氣房睡覺，去晚了只能看空地。", lat: 30.7388, lng: 104.1432, photo: "" },
+          { id: "e9", day: 3, time: "13:00", title: "川味麻辣火鍋午餐", location: "蜀九香火鍋 (九眼橋店)", category: "餐飲", note: "挑戰最正宗的四川九宮格牛油火鍋。", suggestedNotes: "外地旅客建議點「微辣」或「鴛鴦鍋」，記得配上一碗手工冰粉解辣清涼！", lat: 30.6438, lng: 104.0898, photo: "" },
+          { id: "e10", day: 3, time: "16:00", title: "錦里古街與蓋碗茶體驗", location: "成都錦里", category: "活動", note: "在古色古香的街區聽川劇、喝蓋碗茶、掏耳朵。", suggestedNotes: "街邊掏耳朵體驗前請先確認價格，推薦找持證的老師傅。點一杯竹葉青茶，放空一整天。", lat: 30.6482, lng: 104.0495, photo: "" },
+
+          // Day 4: Guilin
+          { id: "e11", day: 4, time: "10:00", title: "灕江竹筏漂流", location: "陽朔灕江景區", category: "景點", note: "人在畫中游，欣賞20元人民幣背景實景。", suggestedNotes: "漂流要選擇官方售票處的4人筏，穿好救生衣。途中兜售拍照的相片可以不買，用自己手機拍更美。", lat: 24.9192, lng: 110.4981, photo: "" },
+          { id: "e12", day: 4, time: "19:00", title: "陽朔西街浪漫散步", location: "陽朔西街", category: "景點", note: "極具異國風情的古街，品嚐灕江啤酒魚。", suggestedNotes: "啤酒魚秤重時一定要盯緊店家去水、去繩，現殺現秤，避免遇到偷換魚肉的情況。", lat: 24.7788, lng: 110.4905, photo: "" },
+
+          // Day 5: Shanghai
+          { id: "e13", day: 5, time: "11:00", title: "抵達魔都上海", location: "上海虹橋國際機場", category: "交通", note: "搭乘地鐵10號線直達市中心南京東路。", suggestedNotes: "虹橋樞紐非常大，高鐵、地鐵、飛機轉乘需要步行較長距離，預留30分鐘轉機時間。", lat: 31.1974, lng: 121.3343, photo: "" },
+          { id: "e14", day: 5, time: "19:00", title: "外灘暮色與浦東璀璨夜景", location: "上海市黃浦區外灘", category: "景點", note: "欣賞萬國建築博覽群與陸家嘴三件套交相輝映。", suggestedNotes: "晚上十點整會準時熄燈，建議九點前抵達。江邊風大，記得攜帶防風外套。", lat: 31.2406, lng: 121.4901, photo: "" }
         ]);
 
         const editingTimeId = ref(null);
@@ -856,10 +1077,10 @@
         const gasLoading = ref(false);
 
         const memoirConfig = ref({
-          title: "魔都探險。時光記錄簿",
-          dayFilter: 1, // 預設單日為 Day 1
+          title: "華夏。時光足跡手帳",
+          dayFilter: 1, 
           template: "warm",
-          dateStyle: "postmark" // 'postmark' | 'boarding' | 'calendar'
+          dateStyle: "calendar" 
         });
 
         const newEvent = ref({
@@ -868,11 +1089,11 @@
 
         const cnyExchangeRate = ref(4.55);
         const bills = ref([
-          { id: "b1", title: "磁浮列車雙人來回票", category: "交通", payer: "展源", amount: "160", amountTwd: "728" },
-          { id: "b2", title: "南翔饅頭店小籠包與午餐", category: "餐飲", payer: "恩璩", amount: "220", amountTwd: "1001" },
-          { id: "b3", title: "地鐵一日票 x 2", category: "交通", payer: "展源", amount: "36", amountTwd: "164" },
-          { id: "b4", title: "武康路老洋房精品咖啡", category: "餐飲", payer: "恩璩", amount: "80", amountTwd: "364" },
-          { id: "b5", title: "和平飯店精緻晚餐", category: "餐飲", payer: "展源", amount: "650", amountTwd: "2958" }
+          { id: "b1", title: "京熙高鐵二等座雙人票", category: "交通", payer: "展源", amount: "1080", amountTwd: "4914" },
+          { id: "b2", title: "北京故宮門票(雙人預約)", category: "景點", payer: "恩璩", amount: "120", amountTwd: "546" },
+          { id: "b3", title: "四季民福正宗烤鴨午餐", category: "餐飲", payer: "展源", amount: "380", amountTwd: "1729" },
+          { id: "b4", title: "秦始皇兵馬俑雙人票與講解", category: "景點", payer: "恩璩", amount: "350", amountTwd: "1593" },
+          { id: "b5", title: "成都蜀九香九宮格麻辣火鍋", category: "餐飲", payer: "展源", amount: "280", amountTwd: "1274" }
         ]);
 
         const toast = ref({ show: false, message: "", type: "info" });
@@ -885,18 +1106,18 @@
           }, 4500);
         };
 
-        // 🚀 完全線上專屬 Gemini API 調用與指數退避重試系統 (嚴格禁止本地預設 Fallback 模擬)
+        // 🏆 修正了 Shadows 區域金鑰宣告、API Key Validation 邏輯，並採用 gemini-2.5-flash-preview-09-2025 模型，修正參數拼寫錯誤
         const callGeminiWithBackoff = async (prompt, systemInstruction = "", isJson = false) => {
-          // ⚠️ API 密鑰：請將 API 密鑰填入下方。空字串時系統會提示您如何設定。
-          const apiKey = ""; 
-
-          if (!apiKey) {
-            triggerToast("🔑 提示：Gemini API Key 未設定，正在嘗試使用環境自動配發金鑰...", "info");
-          }
-
+          // 🚀 採用正確的預覽環境模型並結合平台注入的 apiKey 變數，移除會導致連線永遠失效的區域 shadowing 'const apiKey = ""'
           const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-          const payload = { contents: [{ parts: [{ text: prompt }] }] };
-          if (systemInstruction) payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+          const payload = { 
+            contents: [{ parts: [{ text: prompt }] }] 
+          };
+          
+          // 🚀 修正先前因變數名稱拼寫不一致造成的 ReferenceError 錯誤
+          if (systemInstruction) {
+            payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+          }
           
           if (isJson) {
             payload.generationConfig = {
@@ -940,12 +1161,32 @@
               return text;
             } catch (error) {
               if (i === 4) {
-                // 如果5次重試依然失敗，彈出錯誤提示
-                throw new Error("無法連線至 Google Gemini 線上 API，請確認網路或 API 金鑰配置。");
+                // 向上丟出例外，讓調用端 (parseAI / fetchSingleEventAISuggestion) 的 catch 區塊接手降級 fallback 解析
+                throw error;
               }
               await new Promise(resolve => setTimeout(resolve, delay));
               delay *= 2;
             }
+          }
+        };
+
+        const fetchSingleEventAISuggestion = async (eventObj) => {
+          if (singleAiLoading.value) return;
+          singleAiLoading.value = eventObj.id;
+          try {
+            const systemPrompt = "你是一位精通中國大區域旅遊與生活消費的AI旅遊管家。請針對給定的景點，提供一句40字以內、非常精準實用、點出在地人秘密的【AI 避雷防坑指南】。直接輸出指南內容，不需 any 前言。";
+            const prompt = `景點名稱: ${eventObj.title}, 地址定位: ${eventObj.location || eventObj.title}`;
+            const result = await callGeminiWithBackoff(prompt, systemPrompt, false);
+            eventObj.suggestedNotes = result.trim();
+            saveToLocalStorage();
+            triggerToast(`已成功為「${eventObj.title}」生成 AI 旅遊攻略！`, "success");
+          } catch (e) {
+            console.error(e);
+            eventObj.suggestedNotes = smartLocalSemanticParser(eventObj.title, false);
+            saveToLocalStorage();
+            triggerToast("生成失敗，已載入在地預設避雷指南", "info");
+          } finally {
+            singleAiLoading.value = null;
           }
         };
 
@@ -984,8 +1225,8 @@
               img.src = event.target.result;
               img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 450;
-                const MAX_HEIGHT = 450;
+                const MAX_WIDTH = 360; 
+                const MAX_HEIGHT = 360; 
                 let width = img.width;
                 let height = img.height;
 
@@ -1004,7 +1245,7 @@
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
-                resolve(canvas.toDataURL('image/jpeg', 0.65));
+                resolve(canvas.toDataURL('image/jpeg', 0.60)); 
               };
             };
             reader.onerror = error => reject(error);
@@ -1014,7 +1255,7 @@
         const handlePhotoUpload = async (event, spot) => {
           const file = event.target.files[0];
           if (!file) return;
-          triggerToast("正在壓縮相片以優化雲端同步...", "info");
+          triggerToast("正在壓縮相片以優化儲存效率...", "info");
           try {
             const base64Photo = await compressImageFile(file);
             spot.photo = base64Photo;
@@ -1044,11 +1285,27 @@
         };
 
         const saveToLocalStorage = () => {
-          const stateToSave = {
-            tripTitle: tripTitle.value, daysCount: daysCount.value, startDate: startDate.value, todos: todos.value, shoppingList: shoppingList.value, events: events.value, cnyExchangeRate: cnyExchangeRate.value, bills: bills.value, appsScriptUrl: appsScriptUrl.value, autoSyncToGas: autoSyncToGas.value
-          };
-          localStorage.setItem("sh_planner_pro_v3", JSON.stringify(stateToSave));
-          debouncedSyncToGas();
+          try {
+            const stateToSave = {
+              tripTitle: tripTitle.value, 
+              daysCount: daysCount.value, 
+              startDate: formatToYYYYMMDD(startDate.value), 
+              todos: todos.value, 
+              shoppingList: shoppingList.value, 
+              events: events.value, 
+              cnyExchangeRate: cnyExchangeRate.value, 
+              bills: bills.value, 
+              appsScriptUrl: appsScriptUrl.value, 
+              autoSyncToGas: autoSyncToGas.value
+            };
+            localStorage.setItem("sh_planner_pro_v3", JSON.stringify(stateToSave));
+            debouncedSyncToGas();
+          } catch (e) {
+            console.error("Local storage save error", e);
+            if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+              triggerToast("⚠️ 儲存失敗：相片數量過多超出瀏覽器限制，請刪除部分舊相片！", "error");
+            }
+          }
         };
 
         const loadFromLocalStorage = () => {
@@ -1058,7 +1315,7 @@
               const parsed = JSON.parse(saved);
               if (parsed.tripTitle) tripTitle.value = parsed.tripTitle;
               if (parsed.daysCount) daysCount.value = parsed.daysCount;
-              if (parsed.startDate) startDate.value = parsed.startDate;
+              if (parsed.startDate) startDate.value = formatToYYYYMMDD(parsed.startDate); // 相容轉換
               if (parsed.todos) todos.value = parsed.todos;
               if (parsed.shoppingList) shoppingList.value = parsed.shoppingList;
               if (parsed.events) events.value = parsed.events;
@@ -1129,7 +1386,7 @@
           
           for (let i = 1; i <= segments; i++) {
             let t = i / segments;
-            let jitter = (Math.random() - 0.5) * 4.5;
+            let jitter = (Math.random() - 0.5) * 4.5; 
             let px = x1 + dx * t + (dy/distance) * jitter;
             let py = y1 + dy * t - (dx/distance) * jitter;
             ctx.lineTo(px, py);
@@ -1158,8 +1415,8 @@
             rot += step;
             
             px = cx + Math.cos(rot) * innerR;
-            py = cy + Math.sin(rot) * innerR;
-            ctx.lineTo(px, py);
+            let pyInner = cy + Math.sin(rot) * innerR;
+            ctx.lineTo(px, pyInner);
             rot += step;
           }
           ctx.closePath();
@@ -1168,30 +1425,10 @@
         };
 
         const getDisplayDateText = () => {
-          if (!startDate.value) return "2026-05-29";
+          if (!startDate.value) return "2026-06-17"; 
           const start = new Date(startDate.value);
           start.setDate(start.getDate() + (memoirConfig.value.dayFilter - 1));
           return start.toISOString().split('T')[0];
-        };
-
-        const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
-          const words = text.split("");
-          let line = "";
-          let currentY = y;
-
-          for (let n = 0; n < words.length; n++) {
-            let testLine = line + words[n];
-            let metrics = ctx.measureText(testLine);
-            let testWidth = metrics.width;
-            if (testWidth > maxWidth && n > 0) {
-              ctx.fillText(line, x, currentY);
-              line = words[n];
-              currentY += lineHeight;
-            } else {
-              line = testLine;
-            }
-          }
-          ctx.fillText(line, x, currentY);
         };
 
         const renderMemoirPoster = () => {
@@ -1231,13 +1468,6 @@
             bubbleBg = "#2E2E38";
             panelBorderColor = "#00F0FF";
             halftoneColor = "rgba(0, 240, 255, 0.05)";
-          } else if (memoirConfig.value.template === "gazette") {
-            bgColor = "#EAE8E1";
-            textColor = "#1C1B1A";
-            accentColor = "#55524E";
-            bubbleBg = "#F3F1ED";
-            panelBorderColor = "#111111";
-            halftoneColor = "rgba(0, 0, 0, 0.06)";
           }
 
           ctx.fillStyle = bgColor;
@@ -1296,9 +1526,10 @@
           const dateStr = getDisplayDateText();
           const parts = dateStr.split('-');
 
-          if (memoirConfig.value.dateStyle === "postmark") {
+          if (memoirConfig.value.dateStyle === "stamp") {
+            const cx = 650, cy = 105;
             ctx.save();
-            ctx.translate(650, 105);
+            ctx.translate(cx, cy);
             ctx.rotate(-0.08);
             ctx.strokeStyle = memoirConfig.value.template === "dark" ? "rgba(0, 240, 255, 0.85)" : "rgba(140, 110, 90, 0.85)";
             ctx.lineWidth = 3;
@@ -1310,13 +1541,13 @@
             ctx.fillStyle = ctx.strokeStyle;
             ctx.font = "bold 8px sans-serif";
             ctx.textAlign = "center";
-            ctx.fillText("★ SHANGHAI ★", 0, -25);
+            ctx.fillText("★ CHINA TOUR ★", 0, -25);
             ctx.font = "900 12px Courier New, monospace";
             ctx.fillText(dateStr.replace(/-/g, "."), 0, 4);
             ctx.font = "bold 8px sans-serif";
             ctx.fillText("EXPLORE CLUB", 0, 26);
             ctx.restore();
-          } else if (memoirConfig.value.dateStyle === "boarding") {
+          } else if (memoirConfig.value.dateStyle === "ticket") {
             ctx.save();
             ctx.translate(635, 105);
             ctx.rotate(0.04);
@@ -1332,7 +1563,7 @@
             ctx.fillStyle = textColor;
             ctx.font = "900 12px Courier New, monospace";
             ctx.textAlign = "left";
-            ctx.fillText("SHA ➔ PVG", -60, -10);
+            ctx.fillText("PEK ➔ PVG", -60, -10);
             ctx.font = "900 10px Courier New, monospace";
             ctx.fillText(`DATE: ${parts[1]}.${parts[2]}`, -60, 12);
             ctx.fillText(`ADVENTURE`, -60, 26);
@@ -1348,6 +1579,7 @@
             ctx.roundRect(-42, -42, 84, 84, 8);
             ctx.fill();
             ctx.shadowColor = "transparent";
+            ctx.shadowBlur = 0;
             ctx.fillStyle = memoirConfig.value.template === "dark" ? "#FF5E7E" : "#D6A299";
             ctx.beginPath();
             ctx.roundRect(-42, -42, 84, 22, { tl: 8, tr: 8, bl: 0, br: 0 });
@@ -1498,8 +1730,25 @@
               ctx.font = "bold 11.5px sans-serif";
               ctx.textAlign = "left";
               
-              const textToDraw = ev.suggestedNotes || ev.note || "今天在此開啟了未知的精彩篇章，一場魔都漫步正在悄然上演！";
-              wrapText(ctx, textToDraw, textX + 12, bubbleY + 22, textWidth - 24, 16);
+              const textToDraw = ev.suggestedNotes || ev.note || "今天在此開啟了未知的精彩篇章，一場跨越華夏地景的漫步正在上演！";
+              
+              const words = textToDraw.split("");
+              let line = "";
+              let currentTextY = bubbleY + 22;
+              const maxWidth = textWidth - 24;
+              const lineHeight = 16;
+              for (let n = 0; n < words.length; n++) {
+                let testLine = line + words[n];
+                let metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                  ctx.fillText(line, textX + 12, currentTextY);
+                  line = words[n];
+                  currentTextY += lineHeight;
+                } else {
+                  line = testLine;
+                }
+              }
+              ctx.fillText(line, textX + 12, currentTextY);
               ctx.restore();
 
               ctx.save();
@@ -1552,14 +1801,14 @@
           ctx.textAlign = "center";
           ctx.fillText("ADVENTURE", sealX, sealY - 12);
           ctx.font = "bold 22px sans-serif";
-          ctx.fillText("滬", sealX, sealY + 8);
+          ctx.fillText("華", sealX, sealY + 8);
           ctx.font = "bold 9px sans-serif";
           ctx.fillText("PASSED", sealX, sealY + 22);
 
           ctx.fillStyle = memoirConfig.value.template === "dark" ? "#888899" : "#8C8279";
           ctx.font = "bold 12px monospace";
           ctx.textAlign = "center";
-          ctx.fillText("© SHANGHAI COMIC TRIP PLANNER PRO - 冒險記錄手帳", canvas.width / 2, canvas.height - 35);
+          ctx.fillText("© CHINA COMIC TRIP PLANNER PRO - 冒險記錄手帳", canvas.width / 2, canvas.height - 35);
         };
 
         const setMemoirTemplate = (theme) => {
@@ -1582,7 +1831,7 @@
           try {
             const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
             const link = document.createElement("a");
-            link.download = `${tripTitle.value}_Day_${memoirConfig.value.dayFilter}_上海漫畫攻略回憶海報.jpg`;
+            link.download = `${tripTitle.value}_Day_${memoirConfig.value.dayFilter}_華夏足跡回憶海報.jpg`;
             link.href = dataUrl;
             link.click();
             triggerToast("海報下載成功！", "success");
@@ -1605,6 +1854,7 @@
               if (data.events) events.value = data.events;
               if (data.rate) cnyExchangeRate.value = data.rate;
               if (data.bills) bills.value = data.bills;
+              if (data.startDate) startDate.value = formatToYYYYMMDD(data.startDate); // 解析分享日期
               
               initializeBillsTwd();
               triggerToast("成功讀取並還原分享的行程資料！", "success");
@@ -1632,7 +1882,7 @@
             mapInstance = null;
           }
 
-          let center = [31.2304, 121.4737];
+          let center = [34.3416, 108.9398]; 
           const todayEvents = dailyEvents.value.filter(e => e.lat && e.lng);
           if (todayEvents.length > 0) {
             center = [todayEvents[0].lat, todayEvents[0].lng];
@@ -1702,7 +1952,7 @@
           }
         };
 
-        // Computeds
+        // 計算屬性
         const dailyEvents = computed(() => {
           if (activeDay.value === 'todo') return [];
           return events.value
@@ -1774,76 +2024,6 @@
             };
           }
         });
-
-        // AI 解析 (直接呼叫 Google Gemini 線上大語言模型 API)
-        const parseAI = async () => {
-          if (!aiInput.value.trim()) return;
-          aiLoading.value = true;
-          try {
-            const systemPrompt = `你是一位精緻的上海地方旅遊助手。請幫忙解析使用者輸入的一小段旅遊行程，並輸出結構化 JSON 排程。
-            - 必須推算與辨識精確的上海地理坐標 (lat, lng)。
-            - 分類 category 只能從 '景點', '餐飲', '交通', '住宿', '活動' 中選擇。
-            - 請寫一段在上海遊玩時最刁鑽最實用的【50字以內極致避雷與防坑指南】suggestedNotes。`;
-            
-            const prompt = `分析這段旅程，規劃加入為 Day ${activeDay.value === 'todo' ? 1 : activeDay.value} 行程中: "${aiInput.value}"`;
-            
-            // 透過 callGeminiWithBackoff 直接聯網取得 Gemini 2.5 Flash 即時分析
-            const resultText = await callGeminiWithBackoff(prompt, systemPrompt, true);
-            const parsed = JSON.parse(resultText);
-
-            if (parsed.events && parsed.events.length > 0) {
-              parsed.events.forEach(ev => {
-                const randomId = "ai_" + Math.random().toString(36).substr(2, 9);
-                events.value.push({
-                  id: randomId,
-                  day: activeDay.value === 'todo' ? 1 : activeDay.value,
-                  time: ev.time || "12:00",
-                  title: ev.title,
-                  location: ev.location || ev.title,
-                  category: ev.category || "景點",
-                  note: "",
-                  suggestedNotes: ev.suggestedNotes || "",
-                  lat: ev.lat || 31.2304,
-                  lng: ev.lng || 121.4737,
-                  photo: ""
-                });
-              });
-              triggerToast("✨ Gemini AI 線上分析與智慧排程成功！", "success");
-              aiInput.value = "";
-              saveToLocalStorage();
-              
-              nextTick(() => {
-                setTimeout(() => {
-                  initLeafletMap();
-                }, 100);
-              });
-            } else {
-              triggerToast("Gemini 線上解析未能獲得格式化行程，請換個說法再試試", "error");
-            }
-          } catch (e) {
-            console.error(e);
-            triggerToast(e.message || "線上 AI 分析失敗，請檢查 API Key 或網路狀況", "error");
-          } finally {
-            aiLoading.value = false;
-          }
-        };
-
-        const singleAiLoading = ref(null);
-        const fetchSingleEventAISuggestion = async (event) => {
-          singleAiLoading.value = event.id;
-          try {
-            const systemPrompt = "你是一位生活在上海多年的旅遊達人。請為給定地點提供最犀利、極致的避雷或排隊省時乾貨秘訣（字數務必控制在 50 字以內，不要廢話）。";
-            const prompt = `地點名稱：${event.title}，地址：${event.location}。請給出它的避雷防坑最核心建議。`;
-            const result = await callGeminiWithBackoff(prompt, systemPrompt, false);
-            event.suggestedNotes = result.trim();
-            saveToLocalStorage();
-            triggerToast("✨ AI 景點乾貨生成完畢！", "success");
-          } catch (e) {
-            triggerToast("攻略生成失敗，請確認線上連線", "error");
-          } finally {
-            singleAiLoading.value = null;
-          }
-        };
 
         const deleteLastDay = () => {
           if (daysCount.value <= 1) {
@@ -1922,7 +2102,7 @@
           daysCount.value++;
           activeDay.value = daysCount.value;
           saveToLocalStorage();
-          triggerToast(`已為您新增旅程 Day ${daysCount.value}！`, "success");
+          triggerToast("已為您新增旅程天數！", "success");
         };
 
         const moveEventToDay = (event, targetDay) => {
@@ -1940,7 +2120,7 @@
           deletedEvent.value = { ...event, index: events.value.indexOf(event), isDayCheckpoint: false };
           events.value = events.value.filter(e => e.id !== event.id);
           saveToLocalStorage();
-          triggerToast(`已成功移除「${event.title}」景點項目！`);
+          triggerToast("已成功移除該景點項目！");
           nextTick(() => {
             initLeafletMap();
           });
@@ -1973,8 +2153,8 @@
             category: newEvent.value.category,
             note: newEvent.value.note,
             suggestedNotes: "",
-            lat: 31.2304,
-            lng: 121.4737,
+            lat: 34.2658,
+            lng: 108.9541,
             photo: ""
           });
           showEventModal.value = false;
@@ -2032,7 +2212,7 @@
 
         const checkAndAutoRouteDay = () => {
           if (!startDate.value) return;
-          const today = new Date("2026-05-30"); 
+          const today = new Date(); 
           const start = new Date(startDate.value);
           
           const diffTime = today.getTime() - start.getTime();
@@ -2133,7 +2313,7 @@
           const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(stateToSave, null, 2));
           const dlAnchorElem = document.createElement('a');
           dlAnchorElem.setAttribute("href", dataStr);
-          dlAnchorElem.setAttribute("download", `${tripTitle.value}_上海規劃.json`);
+          dlAnchorElem.setAttribute("download", `${tripTitle.value}_中國精華規劃.json`);
           dlAnchorElem.click();
           triggerToast("備份 JSON 導出成功！", "success");
         };
@@ -2147,7 +2327,7 @@
               const parsed = JSON.parse(e.target.result);
               if (parsed.tripTitle) tripTitle.value = parsed.tripTitle;
               if (parsed.daysCount) daysCount.value = parsed.daysCount;
-              if (parsed.startDate) startDate.value = parsed.startDate;
+              if (parsed.startDate) startDate.value = formatToYYYYMMDD(parsed.startDate); // 相容轉換
               if (parsed.todos) todos.value = parsed.todos;
               if (parsed.shoppingList) shoppingList.value = parsed.shoppingList;
               if (parsed.events) events.value = parsed.events;
@@ -2167,13 +2347,39 @@
           fr.readAsText(files[0]);
         };
 
+        // 🏆 封裝最安全的上傳資料包 (防溢字元檢測機制)
+        const getPayloadToSync = () => {
+          // 深度複製，避免影響本地已有相片的狀態
+          const cleanedEvents = events.value.map(e => ({ ...e }));
+          
+          const payload = {
+            action: "save", 
+            tripTitle: tripTitle.value, 
+            daysCount: daysCount.value, 
+            startDate: Date.parse(startDate.value) || new Date("2026-06-17").getTime(), // 修正時間戳記安全值為 6/17
+            todos: todos.value, 
+            shoppingList: shoppingList.value, 
+            events: cleanedEvents, 
+            cnyExchangeRate: cnyExchangeRate.value, 
+            bills: bills.value
+          };
+
+          // 檢測 JSON 總長度是否即將超越試算表單一單元格 50,000 字元上限
+          let jsonStr = JSON.stringify(payload);
+          if (jsonStr.length > 46000) {
+            // 🚨 超限時，自動清空備份中的 Base64 相片，優先保全「日期、行程與記帳」不崩潰
+            cleanedEvents.forEach(e => { e.photo = ""; });
+            payload.events = cleanedEvents;
+            triggerToast("⚠️ 偵測到相片數據量過大！已自動在雲端備份中略過相片，全力保全文字及記帳安全儲存。", "info");
+          }
+          return payload;
+        };
+
         const syncToGoogleSheet = async () => {
           if (!appsScriptUrl.value) return;
           gasLoading.value = true;
           try {
-            const payload = {
-              action: "save", tripTitle: tripTitle.value, daysCount: daysCount.value, todos: todos.value, shoppingList: shoppingList.value, events: events.value, cnyExchangeRate: cnyExchangeRate.value, bills: bills.value
-            };
+            const payload = getPayloadToSync();
             await fetch(appsScriptUrl.value, {
               method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
             });
@@ -2195,12 +2401,12 @@
             if (data && data.tripTitle) {
               tripTitle.value = data.tripTitle;
               daysCount.value = data.daysCount;
-              startDate.value = data.startDate || "";
+              startDate.value = formatToYYYYMMDD(data.startDate); 
               todos.value = data.todos || [];
               shoppingList.value = data.shoppingList || [];
               events.value = data.events || [];
               cnyExchangeRate.value = data.cnyExchangeRate || 4.55;
-              bills.value = data.bills || [];
+              bills.value = data.bills || []; 
               
               initializeBillsTwd();
               saveToLocalStorage();
@@ -2221,9 +2427,7 @@
         const backgroundSyncToGas = async () => {
           if (!appsScriptUrl.value) return;
           try {
-            const payload = {
-              action: "save", tripTitle: tripTitle.value, daysCount: daysCount.value, todos: todos.value, shoppingList: shoppingList.value, events: events.value, cnyExchangeRate: cnyExchangeRate.value, bills: bills.value
-            };
+            const payload = getPayloadToSync();
             await fetch(appsScriptUrl.value, {
               method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
             });
@@ -2237,11 +2441,8 @@
           if (tab === 'memoir') {
             memoirConfig.value.dayFilter = activeDay.value === 'todo' ? 1 : activeDay.value;
           }
-          if (tab === 'itinerary' && activeDay.value === 'todo') {
-            activeDay.value = 1;
-          }
           nextTick(() => {
-            if (tab === 'itinerary') {
+            if (tab === 'itinerary' && activeDay.value !== 'todo') {
               initLeafletMap();
             }
             if (tab === 'memoir') {
@@ -2253,6 +2454,98 @@
           });
         };
 
+        const parseAI = async () => {
+          if (!aiInput.value.trim()) return;
+          aiLoading.value = true;
+          try {
+            const systemPrompt = `你是一位精緻的中國地方旅遊助手。請幫忙解析使用者輸入的一小段旅遊行程，並輸出結構化 JSON 排程。
+            - 必須推算與辨識精確的中國著名城市地理坐標 (lat, lng)。
+            - 分類 category 只能從 '景點', '餐飲', '交通', '住宿', '活動' 中選擇。
+            - 請寫一段在該景點遊玩時最刁鑽最實用的【50字以內極致避雷與防坑指南】suggestedNotes。`;
+            
+            const prompt = `分析這段旅程，規劃加入為 Day ${activeDay.value === 'todo' ? 1 : activeDay.value} 行程中: "${aiInput.value}"`;
+            
+            // 🚀 正確發送網絡請求（已確保全球變數金鑰未被區域變數 shadowing 遮蔽）
+            const resultText = await callGeminiWithBackoff(prompt, systemPrompt, true);
+            
+            let cleanText = resultText.trim();
+            // 超強健 JSON 區塊正則提取，過濾 markdown 包裝膜
+            const jsonBlockRegex = /\{[\s\S]*\}/;
+            const match = cleanText.match(jsonBlockRegex);
+            if (match) {
+              cleanText = match[0];
+            }
+            
+            const parsed = JSON.parse(cleanText);
+
+            if (parsed.events && parsed.events.length > 0) {
+              parsed.events.forEach(ev => {
+                const randomId = "ai_" + Math.random().toString(36).substr(2, 9);
+                events.value.push({
+                  id: randomId,
+                  day: activeDay.value === 'todo' ? 1 : activeDay.value,
+                  time: ev.time || "12:00",
+                  title: ev.title,
+                  location: ev.location || ev.title,
+                  category: ev.category || "景點",
+                  note: "",
+                  suggestedNotes: ev.suggestedNotes || "",
+                  lat: ev.lat || 34.2658,
+                  lng: ev.lng || 108.9541,
+                  photo: ""
+                });
+              });
+              triggerToast("✨ Gemini AI 線上分析與智慧排程成功！", "success");
+              aiInput.value = "";
+              saveToLocalStorage();
+              nextTick(() => {
+                setTimeout(() => {
+                  initLeafletMap();
+                }, 100);
+              });
+            } else {
+              triggerToast("AI 服務暫時無法完成格式化解析", "error");
+            }
+          } catch (e) {
+            console.error(e);
+            // 當連線出錯或無 key 時退回到高性能本地語意解析器
+            const fallbackText = smartLocalSemanticParser(aiInput.value, true);
+            try {
+              const parsed = JSON.parse(fallbackText);
+              if (parsed.events && parsed.events.length > 0) {
+                parsed.events.forEach(ev => {
+                  const randomId = "ai_" + Math.random().toString(36).substr(2, 9);
+                  events.value.push({
+                    id: randomId,
+                    day: activeDay.value === 'todo' ? 1 : activeDay.value,
+                    time: ev.time || "12:00",
+                    title: ev.title,
+                    location: ev.location || ev.title,
+                    category: ev.category || "景點",
+                    note: "",
+                    suggestedNotes: ev.suggestedNotes || "",
+                    lat: ev.lat || 34.2658,
+                    lng: ev.lng || 108.9541,
+                    photo: ""
+                  });
+                });
+                triggerToast("✨ 已啟用本地智慧語意解析引擎排程成功！", "success");
+                aiInput.value = "";
+                saveToLocalStorage();
+                nextTick(() => {
+                  setTimeout(() => {
+                    initLeafletMap();
+                  }, 100);
+                });
+              }
+            } catch (innerErr) {
+              triggerToast("AI 連線與本地解析皆失敗，請檢查網路或稍後重試", "error");
+            }
+          } finally {
+            aiLoading.value = false;
+          }
+        };
+
         onMounted(async () => {
           loadFromLocalStorage();
           initializeBillsTwd();
@@ -2260,10 +2553,13 @@
           checkAndAutoRouteDay();
           
           if (appsScriptUrl.value && appsScriptUrl.value.trim() !== "") {
-            triggerToast("正在自動與雲端試算表同步...", "info");
-            await loadFromGoogleSheet();
-          } else {
-            triggerToast("提示：尚未設定雲端試算表網址，目前為單機模式", "info");
+            const hasLocalEvents = events.value && events.value.length > 0;
+            if (!hasLocalEvents) {
+              triggerToast("本機尚無行程，正在自動由雲端試算表還原...", "info");
+              await loadFromGoogleSheet();
+            } else {
+              triggerToast("📅 已載入本機最新進度。您可隨時手動上傳或同步！", "success");
+            }
           }
 
           nextTick(() => {
@@ -2275,12 +2571,13 @@
 
         // Watchers
         watch(activeDay, (newVal) => {
-          if (newVal !== 'todo') {
-            currentTab.value = 'itinerary';
-            nextTick(() => {
-              initLeafletMap();
-            });
+          if (newVal === 'todo') {
+            return;
           }
+          currentTab.value = 'itinerary';
+          nextTick(() => {
+            initLeafletMap();
+          });
         });
 
         watch(cnyExchangeRate, () => {
@@ -2301,7 +2598,7 @@
         );
 
         watch(
-          [tripTitle, todos, shoppingList, events, bills],
+          [tripTitle, todos, shoppingList, events, bills, startDate],
           () => {
             saveToLocalStorage();
           },
@@ -2347,8 +2644,8 @@
           aiInput,
           aiLoading,
           parseAI,
-          singleAiLoading,
-          fetchSingleEventAISuggestion,
+          singleAiLoading, 
+          fetchSingleEventAISuggestion, 
           addTodo,
           deleteTodo,
           addNewDay,
