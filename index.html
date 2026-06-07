@@ -86,7 +86,7 @@
         <div class="flex items-center gap-2">
           <span>{{ toast.message }}</span>
         </div>
-        <button v-if="deletedEvent" @click="undoDelete" class="shrink-0 bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-xl font-bold transition-all text-[10px]">
+        <button v-if="deletedEvent || localBackup" @click="undoDelete" class="shrink-0 bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-xl font-bold transition-all text-[10px]">
           一鍵復原
         </button>
       </div>
@@ -103,7 +103,7 @@
             <h3 class="font-bold text-jp-dark text-sm">雲端 & Google 試算表整合控制台</h3>
           </div>
           <button @click="showCloudDashboard = false" class="p-1 hover:bg-stone-100 rounded-full transition-colors">
-            <svg class="w-4 h-4 text-stone-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            <svg class="w-4 h-4 text-stone-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
         </div>
 
@@ -142,7 +142,7 @@
             </button>
           </div>
           <div class="text-[9px] text-emerald-700 bg-emerald-50 p-2 rounded-xl border border-emerald-100 leading-tight">
-            ⚡ <b>已開啟智慧背景同步</b>：包含所有景點照片，皆會在 1.5 秒後在背景安靜地備份至試算表中。
+            ⚡ <b>已開啟智慧背景同步 (智慧合併)</b>：在編輯完成後，系統會自動在背景取得雲端最新狀態進行雙向合併，絕不遺失任何一方的修改。
           </div>
         </div>
 
@@ -159,7 +159,7 @@
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
           </div>
           <div>
-            <input v-model="tripTitle" @change="saveToLocalStorage" class="text-base font-extrabold text-jp-dark tracking-wide bg-transparent border-none p-0 focus:ring-0 w-44 font-sans focus:bg-white/80 rounded px-1" />
+            <input v-model="tripTitle" @input="debouncedSave" class="text-base font-extrabold text-jp-dark tracking-wide bg-transparent border-none p-0 focus:ring-0 w-44 font-sans focus:bg-white/80 rounded px-1" />
             <p class="text-[9px] text-jp-light font-bold uppercase tracking-wider">China Planner Pro</p>
           </div>
         </div>
@@ -193,7 +193,7 @@
       <!-- 行前設定：旅程出發日期控制項 -->
       <div class="px-5 py-2 bg-stone-50/80 border-t border-jp-sand/40 flex items-center justify-between gap-3 text-xs">
         <div class="flex items-center gap-1.5 text-jp-dark font-extrabold">
-          <svg class="w-3.5 h-3.5 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          <svg class="w-3.5 h-3.5 text-jp-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
           <span>設定啟航日期</span>
         </div>
         <input type="date" v-model="startDate" @change="handleDateChange" 
@@ -232,7 +232,7 @@
       </div>
     </div>
 
-    <!-- 🚀 行程天數欄（全網格適配排版） -->
+    <!-- 🚀 行程天數欄 -->
     <div class="px-4 py-3.5 bg-white/95 border-b-2 border-jp-sand/60 sticky top-[152px] z-30 shadow-md transition-all duration-300">
       <div class="flex flex-col gap-3">
         
@@ -246,7 +246,6 @@
           </div>
           
           <div class="flex items-center gap-1.5">
-            <!-- 擬真機票存根式簽發按鈕 -->
             <button @click="addNewDay" class="text-[10px] bg-jp-yellow/40 hover:bg-jp-accent hover:text-white text-jp-dark border border-jp-accent/50 rounded-lg px-2.5 py-1 font-extrabold transition-all active:scale-95 flex items-center gap-1 shadow-sm">
               <span>🎟️</span> 簽發一日
             </button>
@@ -256,7 +255,7 @@
           </div>
         </div>
         
-        <!-- 手帳天數選擇 (手機原生全覽式網格排版：自動換行) -->
+        <!-- 手帳天數選擇 -->
         <div class="flex flex-col gap-2">
           <!-- 行前準備獨立按鈕 -->
           <button @click="activeDay = 'todo'" 
@@ -301,9 +300,9 @@
             <button @click="addTodo" class="bg-jp-accent text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-jp-accent/90 transition-all">新增</button>
           </div>
           <ul class="space-y-2">
-            <li v-for="(t, idx) in todos" :key="idx" class="flex items-center justify-between p-3 bg-jp-cream/40 rounded-xl hover:bg-jp-cream/50 transition-colors border border-stone-100">
+            <li v-for="(t, idx) in todos" :key="t.id || idx" class="flex items-center justify-between p-3 bg-jp-cream/40 rounded-xl hover:bg-jp-cream/50 transition-colors border border-stone-100">
               <label class="flex items-center gap-3 cursor-pointer flex-1">
-                <input type="checkbox" v-model="t.done" @change="saveToLocalStorage" class="w-4 h-4 rounded text-jp-accent border-stone-300 focus:ring-jp-accent">
+                <input type="checkbox" v-model="t.done" @change="toggleTodo(t)" class="w-4 h-4 rounded text-jp-accent border-stone-300 focus:ring-jp-accent">
                 <span :class="t.done ? 'line-through text-stone-400' : 'text-xs text-jp-dark font-semibold'">{{ t.text }}</span>
               </label>
               <button @click="deleteTodo(idx)" class="text-stone-300 hover:text-red-400 transition-colors p-1">
@@ -381,7 +380,7 @@
                             @click="startEditingTime(event)" 
                             class="flex items-center bg-jp-accent hover:bg-jp-accent/90 text-white rounded-xl px-2 py-0.5 text-[10px] font-bold gap-0.5 shadow-sm transition-all animate-fade"
                             title="點擊原地修改時間">
-                      <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                       <span>{{ event.time }}</span>
                     </button>
 
@@ -431,7 +430,7 @@
                 </div>
 
                 <!-- 個人備註 -->
-                <textarea v-model="event.note" @change="saveToLocalStorage" placeholder="個人心得與旅行備忘錄..." class="w-full text-[9px] p-1.5 bg-jp-cream/50 rounded-lg border border-stone-200/50 focus:ring-1 focus:ring-jp-accent resize-none h-12 focus:outline-none font-medium leading-relaxed shadow-inner"></textarea>
+                <textarea v-model="event.note" @input="debouncedSaveEvent(event)" placeholder="個人心得與旅行備忘錄..." class="w-full text-[9px] p-1.5 bg-jp-cream/50 rounded-lg border border-stone-200/50 focus:ring-1 focus:ring-jp-accent resize-none h-12 focus:outline-none font-medium leading-relaxed shadow-inner"></textarea>
 
                 <!-- 地圖搜尋 -->
                 <div class="flex justify-end pt-0.5">
@@ -582,12 +581,12 @@
             <div v-for="(bill, idx) in filteredBills" :key="bill.id" 
                  class="flex items-center justify-between gap-2 p-2.5 bg-stone-50/50 hover:bg-stone-50 border border-stone-200/60 rounded-2xl transition-all">
               
-              <!-- 1. 項目名稱與分類標籤 (堆疊) -->
+              <!-- 1. 項目名稱與分類標籤 -->
               <div class="flex-1 min-w-0 space-y-1">
                 <input type="text" v-model="bill.title" @input="onTitleInput(bill)" placeholder="請輸入項目項目..."
                        class="w-full bg-transparent border-none p-0 text-xs font-bold text-jp-dark focus:ring-0 focus:outline-none placeholder:text-stone-300">
                 <div class="relative inline-block">
-                  <select v-model="bill.category" @change="saveToLocalStorage"
+                  <select v-model="bill.category" @change="saveBillAndSync(bill)"
                           class="text-[9px] font-extrabold rounded-md px-1.5 py-0.5 border-none focus:ring-0 cursor-pointer appearance-none text-center outline-none select-none transition-all"
                           :class="getCategoryBadgeClass(bill.category || '其他')">
                     <option value="交通">交通</option>
@@ -603,7 +602,7 @@
               <!-- 2. 付款人選擇 -->
               <div class="w-18 shrink-0">
                 <div class="relative">
-                  <select v-model="bill.payer" @change="saveToLocalStorage" 
+                  <select v-model="bill.payer" @change="saveBillAndSync(bill)" 
                           class="w-full text-center rounded-lg py-1 px-1 text-[10px] font-extrabold cursor-pointer appearance-none border border-stone-200/80 focus:ring-1 focus:ring-jp-accent h-7 bg-white shadow-sm"
                           :class="getPayerClass(bill.payer)">
                     <option value="展源">展源</option>
@@ -654,9 +653,9 @@
           </div>
           
           <ul class="space-y-2">
-            <li v-for="(item, idx) in shoppingList" :key="idx" class="flex items-center justify-between p-3 bg-jp-cream/30 rounded-xl hover:bg-jp-cream/50 transition-colors border border-stone-100">
+            <li v-for="(item, idx) in shoppingList" :key="item.id || idx" class="flex items-center justify-between p-3 bg-jp-cream/30 rounded-xl hover:bg-jp-cream/50 transition-colors border border-stone-100">
               <label class="flex items-center gap-3 cursor-pointer flex-1">
-                <input type="checkbox" v-model="item.done" @change="saveToLocalStorage" class="w-4 h-4 rounded text-jp-accent border-stone-300 focus:ring-jp-accent">
+                <input type="checkbox" v-model="item.done" @change="toggleShopItem(item)" class="w-4 h-4 rounded text-jp-accent border-stone-300 focus:ring-jp-accent">
                 <span :class="item.done ? 'line-through text-stone-400' : 'text-xs text-jp-dark font-medium'">{{ item.text }}</span>
               </label>
               <div class="flex items-center gap-3">
@@ -670,10 +669,9 @@
         </div>
       </section>
 
-      <!-- 回記相冊 (Memoir Album Tab - 實體手記航線時光軸) -->
+      <!-- 回記相冊 (Memoir Album Tab) -->
       <section v-if="currentTab === 'memoir'" class="space-y-4 fade-in pb-10">
-        
-        <!-- 連貫手帳時光足跡軸 (照片與景點並列呈現 - 一次顯示一天) -->
+        <!-- 連貫手帳時光足跡軸 -->
         <div class="space-y-6">
           <div v-for="day in [memoirConfig.dayFilter]" :key="day" class="bg-white rounded-3xl p-5 shadow-sm border border-stone-100/80 space-y-4 relative overflow-hidden bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]">
             
@@ -685,7 +683,7 @@
               <span v-if="startDate" class="text-[9px] text-jp-accent bg-jp-yellow/60 px-2 py-0.5 rounded-full font-bold">{{ getDayDateStr(day) }}</span>
             </div>
 
-            <!-- 手寫手帳時光軸，配有圓孔連貫線 -->
+            <!-- 手寫手帳時光軸 -->
             <div class="relative space-y-4 pl-4 pt-2">
               <div class="absolute left-[7px] top-4 bottom-4 border-l-2 border-dashed border-jp-accent/50 pointer-events-none"></div>
 
@@ -696,7 +694,7 @@
                   <span class="text-[6px] font-black text-jp-accent">{{ sIdx + 1 }}</span>
                 </div>
 
-                <!-- 左右排版緊湊卡片 -->
+                <!-- 左右排版卡片 -->
                 <div class="flex-1 bg-stone-50/75 border border-stone-100 rounded-2xl p-3 flex gap-3 items-center justify-between hover:bg-white hover:shadow-sm transition-all duration-300">
                   <div class="min-w-0 flex-1 space-y-1">
                     <div class="flex items-center gap-1">
@@ -709,7 +707,7 @@
                     </p>
                   </div>
 
-                  <!-- 拍立得迷你縮圖與景點並行展示 -->
+                  <!-- 拍立得縮圖 -->
                   <div class="w-16 shrink-0 flex justify-center">
                     <div v-if="ev.photo" class="relative bg-white p-1 pb-2 shadow border border-stone-200/80 rounded-sm transform rotate-[-2deg] w-14 hover:rotate-0 transition-transform">
                       <img :src="ev.photo" class="w-12 h-10 object-cover" />
@@ -745,7 +743,7 @@
             </select>
           </div>
 
-          <!-- 樣式及日期印章設定區 -->
+          <!-- 樣式設定 -->
           <div class="p-4 bg-jp-cream/50 rounded-2xl border border-jp-yellow/60 space-y-3">
             <h4 class="text-xs font-bold text-jp-dark flex items-center gap-1">
               <span>🖼️</span> 樣式模板、改期印章樣式
@@ -788,23 +786,19 @@
 
             <div class="space-y-1 pt-1">
               <label class="text-[10px] text-stone-500 block font-bold">海報主標題</label>
-              <input v-model="memoirConfig.title" type="text" 
+              <input v-model="memoirConfig.title" type="text" @input="debouncedSave"
                      class="w-full text-xs px-3 py-2 rounded-xl bg-white border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent font-bold">
             </div>
           </div>
 
-          <!-- 海報即時預覽 -->
+          <!-- 海報預覽 -->
           <div class="space-y-1.5">
-            <label class="text-[10px] text-stone-400 block font-bold">海報即時預覽 (打卡拍立得將藉手繪針線精準連繫地圖對應景點上)</label>
+            <label class="text-[10px] text-stone-400 block font-bold">海報即時預覽</label>
             <div class="border border-stone-200/80 rounded-2xl overflow-hidden shadow-inner bg-stone-50 flex items-center justify-center p-3">
               <canvas id="memoirCanvas" class="w-full h-auto max-w-[280px] shadow-md border bg-white rounded-lg"></canvas>
             </div>
           </div>
           
-          <div class="text-[9px] text-stone-400 leading-tight">
-            * 提示：系統會自動投射 Day {{ memoirConfig.dayFilter }} 的景點座標成手繪地圖，且**您的打卡相片會與景點錨點直接連線**。請點選「📷上傳照片」補齊景點相片！
-          </div>
-
           <button @click="downloadMemoirPoster" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
             下載大師級足跡手帳海報
@@ -853,8 +847,8 @@
           </div>
 
           <div>
-            <label class="block font-bold text-stone-500 mb-1">行程名稱 (景點 or 店家名稱)</label>
-            <input v-model="newEvent.title" type="text" placeholder="例：北京故宮午門" class="w-full p-2.5 rounded-xl bg-jp-cream border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium shadow-inner">
+            <label class="block font-bold text-stone-500 mb-1">行程名稱</label>
+            <input v-model="newEvent.title" type="text" placeholder="例：北京故宮午門參觀" class="w-full p-2.5 rounded-xl bg-jp-cream border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium shadow-inner">
           </div>
 
           <div>
@@ -898,20 +892,18 @@
   </div>
 
   <script>
-    const apiKey = ""; // 這裡將在執行環境中自動注入
+    const apiKey = ""; 
     const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
-    // 🏆 超強健的日期格式相容解析器 (確保在雲端傳回各種日期格式/時間戳記數字下皆能輸出完美的 YYYY-MM-DD 字串)
+    // 超強健日期格式相容解析器
     const formatToYYYYMMDD = (val) => {
       if (!val) return "2026-06-17"; 
       
       let parsedVal = val;
-      // 🚀 如果傳進來的是數字或看起來像數字的字串（即時間戳記），強制轉為標準 Number 型態以利 Date 解析
       if (typeof val === 'number' || (!isNaN(val) && !isNaN(parseFloat(val)))) {
         parsedVal = Number(val);
       }
 
-      // 如果已經是標準 YYYY-MM-DD 格式，直接返回
       if (typeof parsedVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsedVal)) {
         return parsedVal;
       }
@@ -930,7 +922,7 @@
       return "2026-06-17"; 
     };
 
-    // 定義 Gemini AI 預設的備用解析引擎
+    // 備用解析引擎
     const smartLocalSemanticParser = (prompt, isJson) => {
       const text = prompt.toLowerCase();
       if (isJson) {
@@ -941,7 +933,8 @@
           category: "景點",
           suggestedNotes: "建議提前下載12306與高德地圖確認省際和市內交通。",
           lat: 34.2658,
-          lng: 108.9541
+          lng: 108.9541,
+          updatedAt: Date.now()
         };
 
         let timeMatch = text.match(/(\d+)\s*(點|時)\s*(\d+|半)?/);
@@ -979,7 +972,7 @@
           matchedEvent.lat = 30.7388;
           matchedEvent.lng = 104.1432;
         } else if (text.includes("灕江") || text.includes("桂林")) {
-          matchedEvent.title = "灕江精緻竹筏漂流";
+          matchedEvent.title = "景緻竹筏漂流";
           matchedEvent.location = "陽朔灕江景區";
           matchedEvent.category = "活動";
           matchedEvent.suggestedNotes = "人在畫中游，欣賞20元人民幣背景實景。漂流建議選擇官方售票處的4人筏。";
@@ -1009,20 +1002,23 @@
     createApp({
       setup() {
         const tripTitle = ref("華夏時光足跡手帳");
-        const daysCount = ref(1); // 預設無資料時從 1 天開始
+        const daysCount = ref(1); 
         const activeDay = ref(1);
         const currentTab = ref("itinerary");
-        const startDate = ref(""); // 初始出發日期為空白
-        const lastUpdated = ref(Date.now()); // 最後修改時間戳記
-        const isSyncing = ref(false); // 同步中之防回圈鎖定器
-        const localBackup = ref(null); // 本地覆蓋防丟失備份
+        const startDate = ref(""); 
+        const lastUpdated = ref(Date.now()); 
+        const isSyncing = ref(false); 
+        const localBackup = ref(null); 
         
+        // 刪除項目追蹤器：防止雙向合併時雲端資料再度復活（智慧刪除守衛）
+        const deletedItemIds = ref([]);
+
         // AI 參數
         const aiInput = ref("");
         const aiLoading = ref(false);
         const singleAiLoading = ref(null);
 
-        // 🗑️ 清除所有本地預設/Mock 資料以保持空白狀態
+        // 初始化空白資料架構
         const todos = ref([]);
         const newTodo = ref("");
 
@@ -1058,16 +1054,31 @@
         });
 
         const cnyExchangeRate = ref(4.55);
-        const bills = ref([]); // 清除預設記帳項目
+        const bills = ref([]); 
 
-        const toast = ref({ show: false, message: "", type: "info" });
-        const triggerToast = (msg, type = "info") => {
+        const toast = ref({ show: false, message: '', type: 'info' });
+        const triggerToast = (msg, type = 'info') => {
           toast.value.message = msg;
           toast.value.type = type;
           toast.value.show = true;
           setTimeout(() => {
             toast.value.show = false;
           }, 4500);
+        };
+
+        // 智慧型防震本機存檔 (修改停止 800ms 後，才進行本地儲存與背景同步)
+        let localSaveTimeout = null;
+        const debouncedSave = () => {
+          if (localSaveTimeout) clearTimeout(localSaveTimeout);
+          localSaveTimeout = setTimeout(() => {
+            saveToLocalStorage();
+          }, 800);
+        };
+
+        // 個別行程備忘特殊防震存檔
+        const debouncedSaveEvent = (eventObj) => {
+          eventObj.updatedAt = Date.now();
+          debouncedSave();
         };
 
         const callGeminiWithBackoff = async (prompt, systemInstruction = "", isJson = false) => {
@@ -1116,7 +1127,6 @@
               return text;
             } catch (error) {
               if (i === 4) {
-                // 當所有連線重試失敗時，發出主動警告並降級使用本地解析器
                 triggerToast("Gemini AI 服務連線重試失敗，已自動啟用本地智慧語意解析引擎。", "info");
                 return smartLocalSemanticParser(prompt, isJson);
               }
@@ -1130,15 +1140,17 @@
           if (singleAiLoading.value) return;
           singleAiLoading.value = eventObj.id;
           try {
-            const systemPrompt = "你是一位精通中國大區域旅遊與生活消費的AI旅遊管家。請針對給定的景點，提供一句40字以內、非常精準實用、點出在地人秘密的【AI 避雷防坑指南】。直接輸出指南內容，不需 any 前言。";
+            const systemPrompt = "你是一位精通中國大區域旅遊與生活消費的AI旅遊管家。請針對給定的景點，提供一句40字以內、非常精準實用、點出在地人秘密的【AI 避雷防坑指南】。直接輸出指南內容，不需任何前言。";
             const prompt = `景點名稱: ${eventObj.title}, 地址定位: ${eventObj.location || eventObj.title}`;
             const result = await callGeminiWithBackoff(prompt, systemPrompt, false);
             eventObj.suggestedNotes = result.trim();
+            eventObj.updatedAt = Date.now();
             saveToLocalStorage();
             triggerToast(`已成功為「${eventObj.title}」生成 AI 旅遊攻略！`, "success");
           } catch (e) {
             console.error(e);
             eventObj.suggestedNotes = smartLocalSemanticParser(eventObj.title, false);
+            eventObj.updatedAt = Date.now();
             saveToLocalStorage();
             triggerToast("生成失敗，已載入在地預設避雷指南", "info");
           } finally {
@@ -1149,7 +1161,7 @@
         const generateShareLink = () => {
           try {
             const strippedEvents = events.value.map(e => ({
-              id: e.id, day: e.day, time: e.time, title: e.title, location: e.location, category: e.category, note: e.note, suggestedNotes: e.suggestedNotes, lat: e.lat, lng: e.lng, photo: ""
+              id: e.id, day: e.day, time: e.time, title: e.title, location: e.location, category: e.category, note: e.note, suggestedNotes: e.suggestedNotes, lat: e.lat, lng: e.lng, photo: "", updatedAt: e.updatedAt || Date.now()
             }));
             const shareData = {
               title: tripTitle.value, days: daysCount.value, todos: todos.value, shop: shoppingList.value, events: strippedEvents, rate: cnyExchangeRate.value, bills: bills.value
@@ -1215,6 +1227,7 @@
           try {
             const base64Photo = await compressImageFile(file);
             spot.photo = base64Photo;
+            spot.updatedAt = Date.now();
             saveToLocalStorage();
             triggerToast("相片上傳並壓縮成功！", "success");
           } catch (err) {
@@ -1224,6 +1237,7 @@
 
         const deletePhoto = (spot) => {
           spot.photo = "";
+          spot.updatedAt = Date.now();
           saveToLocalStorage();
           triggerToast("已移除相片");
         };
@@ -1240,7 +1254,7 @@
           }, 1500);
         };
 
-        // 智慧備份本地狀態，防止雲端覆蓋造成損失
+        // 本地覆蓋保護器
         const backupLocalStateBeforeOverwrite = () => {
           localBackup.value = {
             tripTitle: tripTitle.value,
@@ -1251,12 +1265,12 @@
             events: JSON.parse(JSON.stringify(events.value)),
             cnyExchangeRate: cnyExchangeRate.value,
             bills: JSON.parse(JSON.stringify(bills.value)),
-            lastUpdated: lastUpdated.value
+            lastUpdated: lastUpdated.value,
+            deletedItemIds: JSON.parse(JSON.stringify(deletedItemIds.value))
           };
-          deletedEvent.value = { id: "local_sync_backup", isLocalBackup: true };
         };
 
-        // 儲存狀態，防回圈與超限檢測機制
+        // 儲存狀態至本機快取
         const saveToLocalStorage = () => {
           if (isSyncing.value) return; 
           try {
@@ -1272,7 +1286,8 @@
               bills: bills.value, 
               appsScriptUrl: appsScriptUrl.value, 
               autoSyncToGas: autoSyncToGas.value,
-              lastUpdated: lastUpdated.value
+              lastUpdated: lastUpdated.value,
+              deletedItemIds: deletedItemIds.value
             };
             localStorage.setItem("sh_planner_pro_v3", JSON.stringify(stateToSave));
             debouncedSyncToGas();
@@ -1291,7 +1306,7 @@
               const parsed = JSON.parse(saved);
               if (parsed.tripTitle) tripTitle.value = parsed.tripTitle;
               if (parsed.daysCount) daysCount.value = parsed.daysCount;
-              if (parsed.startDate) startDate.value = formatToYYYYMMDD(parsed.startDate); // 相容轉換
+              if (parsed.startDate) startDate.value = formatToYYYYMMDD(parsed.startDate); 
               if (parsed.todos) todos.value = parsed.todos;
               if (parsed.shoppingList) shoppingList.value = parsed.shoppingList;
               if (parsed.events) events.value = parsed.events;
@@ -1300,6 +1315,7 @@
               if (parsed.appsScriptUrl) appsScriptUrl.value = parsed.appsScriptUrl;
               if (parsed.autoSyncToGas !== undefined) autoSyncToGas.value = parsed.autoSyncToGas;
               if (parsed.lastUpdated) lastUpdated.value = parsed.lastUpdated;
+              if (parsed.deletedItemIds) deletedItemIds.value = parsed.deletedItemIds;
             } catch (e) {
               console.error("Local storage error", e);
             }
@@ -1318,19 +1334,22 @@
         const onAmountCnyChange = (bill) => {
           const amt = parseFloat(bill.amount) || 0;
           bill.amountTwd = (amt * cnyExchangeRate.value).toFixed(0);
-          saveToLocalStorage();
+          bill.updatedAt = Date.now();
+          debouncedSave();
         };
 
         const onAmountTwdChange = (bill) => {
           const twd = parseFloat(bill.amountTwd) || 0;
           bill.amount = (twd / cnyExchangeRate.value).toFixed(2);
-          saveToLocalStorage();
+          bill.updatedAt = Date.now();
+          debouncedSave();
         };
 
         const updateAllTwdFromCny = () => {
           bills.value.forEach(bill => {
             const amt = parseFloat(bill.amount) || 0;
             bill.amountTwd = (amt * cnyExchangeRate.value).toFixed(0);
+            bill.updatedAt = Date.now();
           });
         };
 
@@ -1347,28 +1366,6 @@
             sy = (img.height - sh) / 2;
           }
           ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
-        };
-
-        const drawHandDrawnLine = (ctx, x1, y1, x2, y2, color, width = 3) => {
-          ctx.strokeStyle = color;
-          ctx.lineWidth = width;
-          ctx.lineCap = "round";
-          ctx.beginPath();
-          
-          let dx = x2 - x1;
-          let dy = y2 - y1;
-          let distance = Math.sqrt(dx*dx + dy*dy);
-          let segments = Math.max(8, Math.floor(distance / 12));
-          ctx.moveTo(x1, y1);
-          
-          for (let i = 1; i <= segments; i++) {
-            let t = i / segments;
-            let jitter = (Math.random() - 0.5) * 4.5; 
-            let px = x1 + dx * t + (dy/distance) * jitter;
-            let py = y1 + dy * t - (dx/distance) * jitter;
-            ctx.lineTo(px, py);
-          }
-          ctx.stroke();
         };
 
         const drawComicBurst = (ctx, cx, cy, size, fill, stroke) => {
@@ -1831,7 +1828,7 @@
               if (data.events) events.value = data.events;
               if (data.rate) cnyExchangeRate.value = data.rate;
               if (data.bills) bills.value = data.bills;
-              if (data.startDate) startDate.value = formatToYYYYMMDD(data.startDate); // 解析分享日期
+              if (data.startDate) startDate.value = formatToYYYYMMDD(data.startDate); 
               
               initializeBillsTwd();
               triggerToast("成功讀取並還原分享的行程資料！", "success");
@@ -2010,6 +2007,9 @@
           const targetDay = daysCount.value;
           
           backupDeletedDayEvents.value = events.value.filter(e => e.day === targetDay);
+          backupDeletedDayEvents.value.forEach(ev => {
+            deletedItemIds.value.push(ev.id);
+          });
           
           events.value = events.value.filter(e => e.day !== targetDay);
           daysCount.value--;
@@ -2029,7 +2029,7 @@
 
         const undoDelete = () => {
           if (deletedEvent.value) {
-            // 雲端覆蓋防丟失復原邏輯
+            // 還原雲端防蓋本地備份
             if (deletedEvent.value.isLocalBackup && localBackup.value) {
               isSyncing.value = true;
               tripTitle.value = localBackup.value.tripTitle;
@@ -2041,6 +2041,7 @@
               cnyExchangeRate.value = localBackup.value.cnyExchangeRate;
               bills.value = localBackup.value.bills;
               lastUpdated.value = localBackup.value.lastUpdated;
+              deletedItemIds.value = localBackup.value.deletedItemIds;
               
               saveToLocalStorage();
               triggerToast("已恢復您的本地最新進度，並將同步至雲端！", "success");
@@ -2056,12 +2057,17 @@
             if (deletedEvent.value.isDayCheckpoint) {
               daysCount.value = deletedEvent.value.originalDayCount;
               if (backupDeletedDayEvents.value.length > 0) {
+                // 將還原項從已刪除追蹤中剔除
+                backupDeletedDayEvents.value.forEach(ev => {
+                  deletedItemIds.value = deletedItemIds.value.filter(id => id !== ev.id);
+                });
                 events.value = [...events.value, ...backupDeletedDayEvents.value];
                 backupDeletedDayEvents.value = [];
               }
               activeDay.value = daysCount.value;
               triggerToast("天數與當天行程已成功復原！", "success");
             } else {
+              deletedItemIds.value = deletedItemIds.value.filter(id => id !== deletedEvent.value.id);
               events.value.splice(deletedEvent.value.index, 0, {
                 id: deletedEvent.value.id,
                 day: deletedEvent.value.day,
@@ -2073,7 +2079,8 @@
                 suggestedNotes: deletedEvent.value.suggestedNotes || "",
                 lat: deletedEvent.value.lat,
                 lng: deletedEvent.value.lng,
-                photo: deletedEvent.value.photo || ""
+                photo: deletedEvent.value.photo || "",
+                updatedAt: Date.now()
               });
               triggerToast("行程景點已成功復原！", "success");
             }
@@ -2088,14 +2095,28 @@
 
         const addTodo = () => {
           if (!newTodo.value.trim()) return;
-          todos.value.push({ text: newTodo.value.trim(), done: false });
+          const randomId = "todo_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+          todos.value.push({ 
+            id: randomId, 
+            text: newTodo.value.trim(), 
+            done: false, 
+            updatedAt: Date.now() 
+          });
           newTodo.value = "";
           saveToLocalStorage();
           triggerToast("已加入準備項目！", "success");
         };
 
+        const toggleTodo = (t) => {
+          t.updatedAt = Date.now();
+          saveToLocalStorage();
+        };
+
         const deleteTodo = (idx) => {
-          todos.value.splice(idx, 1);
+          const removed = todos.value.splice(idx, 1)[0];
+          if (removed && removed.id) {
+            deletedItemIds.value.push(removed.id);
+          }
           saveToLocalStorage();
         };
 
@@ -2110,6 +2131,7 @@
           const dayNum = parseInt(targetDay);
           if (isNaN(dayNum) || dayNum < 1 || dayNum > daysCount.value) return;
           event.day = dayNum;
+          event.updatedAt = Date.now();
           saveToLocalStorage();
           triggerToast(`已將「${event.title}」移至 Day ${dayNum}！`, "success");
           nextTick(() => {
@@ -2119,6 +2141,9 @@
 
         const removeEvent = (event) => {
           deletedEvent.value = { ...event, index: events.value.indexOf(event), isDayCheckpoint: false };
+          if (event.id) {
+            deletedItemIds.value.push(event.id);
+          }
           events.value = events.value.filter(e => e.id !== event.id);
           saveToLocalStorage();
           triggerToast("已成功移除該景點項目！");
@@ -2156,11 +2181,12 @@
             suggestedNotes: "",
             lat: 34.2658,
             lng: 108.9541,
-            photo: ""
+            photo: "",
+            updatedAt: Date.now()
           });
           showEventModal.value = false;
           saveToLocalStorage();
-          triggerToast("已成功手動建立行程！", "success");
+          triggerToast("已成功建立行程！", "success");
           if (activeDay.value === newEvent.value.day) {
             nextTick(() => {
               initLeafletMap();
@@ -2177,6 +2203,9 @@
           list[index].time = list[targetIdx].time;
           list[targetIdx].time = temp;
 
+          list[index].updatedAt = Date.now();
+          list[targetIdx].updatedAt = Date.now();
+
           saveToLocalStorage();
           nextTick(() => {
             initLeafletMap();
@@ -2192,6 +2221,7 @@
 
         const saveTimeEdit = (event) => {
           event.time = `${tempHours.value}:${tempMinutes.value}`;
+          event.updatedAt = Date.now();
           editingTimeId.value = null;
           saveToLocalStorage();
           triggerToast("出發時間已更新！", "success");
@@ -2236,19 +2266,29 @@
         const insertSpreadsheetRow = () => {
           const randomId = "bill_" + Math.random().toString(36).substr(2, 9);
           bills.value.push({
-            id: randomId, title: "", category: "其他", payer: "展源", amount: "0", amountTwd: "0"
+            id: randomId, title: "", category: "其他", payer: "展源", amount: "0", amountTwd: "0", updatedAt: Date.now()
           });
           saveToLocalStorage();
         };
 
         const removeBillRow = (id) => {
+          const removed = bills.value.find(b => b.id === id);
+          if (removed) {
+            deletedItemIds.value.push(id);
+          }
           bills.value = bills.value.filter(b => b.id !== id);
+          saveToLocalStorage();
+        };
+
+        const saveBillAndSync = (bill) => {
+          bill.updatedAt = Date.now();
           saveToLocalStorage();
         };
 
         const onTitleInput = (bill) => {
           bill.category = detectCategory(bill.title);
-          saveToLocalStorage();
+          bill.updatedAt = Date.now();
+          debouncedSave();
         };
 
         const detectCategory = (title) => {
@@ -2294,16 +2334,29 @@
 
         const addShopItem = () => {
           if (!newShopItem.value.text.trim()) return;
+          const randomId = "shop_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
           shoppingList.value.push({
-            text: newShopItem.value.text.trim(), done: false, budget: newShopItem.value.budget ? String(newShopItem.value.budget) : ""
+            id: randomId,
+            text: newShopItem.value.text.trim(), 
+            done: false, 
+            budget: newShopItem.value.budget ? String(newShopItem.value.budget) : "",
+            updatedAt: Date.now()
           });
           newShopItem.value = { text: "", budget: "" };
           saveToLocalStorage();
           triggerToast("必買清單已更新！", "success");
         };
 
+        const toggleShopItem = (item) => {
+          item.updatedAt = Date.now();
+          saveToLocalStorage();
+        };
+
         const deleteShopItem = (idx) => {
-          shoppingList.value.splice(idx, 1);
+          const removed = shoppingList.value.splice(idx, 1)[0];
+          if (removed && removed.id) {
+            deletedItemIds.value.push(removed.id);
+          }
           saveToLocalStorage();
         };
 
@@ -2348,43 +2401,120 @@
           fr.readAsText(files[0]);
         };
 
-        // 🏆 封裝最安全的上傳資料包 (防溢字元檢測機制)
-        const getPayloadToSync = () => {
-          const cleanedEvents = events.value.map(e => ({ ...e }));
+        // 整理及精簡上傳資料
+        const getPayloadToSync = (sourceEvents) => {
+          const cleanedEvents = sourceEvents.map(e => ({ ...e }));
           const payload = {
             action: "save", 
             tripTitle: tripTitle.value, 
             daysCount: daysCount.value, 
-            startDate: Date.parse(startDate.value) || new Date("2026-06-17").getTime(), // 修正時間戳記安全值為 6/17
+            startDate: Date.parse(startDate.value) || new Date("2026-06-17").getTime(), 
             todos: todos.value, 
             shoppingList: shoppingList.value, 
             events: cleanedEvents, 
             cnyExchangeRate: cnyExchangeRate.value, 
             bills: bills.value,
-            lastUpdated: lastUpdated.value
+            lastUpdated: lastUpdated.value,
+            deletedItemIds: deletedItemIds.value
           };
 
-          // 檢測 JSON 總長度是否即將超越試算表單一單元格 50,000 字元上限
           let jsonStr = JSON.stringify(payload);
           if (jsonStr.length > 46000) {
             cleanedEvents.forEach(e => { e.photo = ""; });
             payload.events = cleanedEvents;
-            triggerToast("⚠️ 偵測到相片數據量過大！已自動在雲端備份中略過相片，全力保全文字及記帳安全儲存。", "info");
           }
           return payload;
         };
 
+        // 智慧雙向列表合併演算 (依照 updatedAt 比對項目，並排除已刪除 ID)
+        const mergeList = (localList, cloudList) => {
+          const mergedMap = new Map();
+          
+          // 1. 先置入雲端狀態
+          cloudList.forEach(item => {
+            if (item && item.id) {
+              mergedMap.set(item.id, item);
+            }
+          });
+          
+          // 2. 用本地修改更替
+          localList.forEach(item => {
+            if (item && item.id) {
+              const cloudItem = mergedMap.get(item.id);
+              if (cloudItem) {
+                if ((item.updatedAt || 0) >= (cloudItem.updatedAt || 0)) {
+                  mergedMap.set(item.id, item);
+                }
+              } else {
+                mergedMap.set(item.id, item);
+              }
+            }
+          });
+          
+          // 3. 抹除別處已明確刪除的守衛
+          deletedItemIds.value.forEach(id => {
+            mergedMap.delete(id);
+          });
+          
+          return Array.from(mergedMap.values());
+        };
+
+        // 雙向合併雲端存檔同步 (GET -> Merge -> POST)
         const syncToGoogleSheet = async () => {
           if (!appsScriptUrl.value) return;
           gasLoading.value = true;
           try {
-            const payload = getPayloadToSync();
+            let cloudState = null;
+            // A. 抓取最新雲端存檔
+            try {
+              const response = await fetch(`${appsScriptUrl.value}?action=load`);
+              if (response.ok) {
+                const resJson = await response.json();
+                if (resJson && resJson.tripTitle) {
+                  cloudState = resJson;
+                }
+              }
+            } catch (e) {
+              console.warn("無法取得雲端狀態進行合併，將直接寫入:", e);
+            }
+
+            // B. 進行深度智慧合併
+            if (cloudState) {
+              events.value = mergeList(events.value, cloudState.events || []);
+              bills.value = mergeList(bills.value, cloudState.bills || []);
+              todos.value = mergeList(todos.value, cloudState.todos || []);
+              shoppingList.value = mergeList(shoppingList.value, cloudState.shoppingList || []);
+
+              if ((cloudState.lastUpdated || 0) > lastUpdated.value) {
+                tripTitle.value = cloudState.tripTitle || tripTitle.value;
+                daysCount.value = cloudState.daysCount || daysCount.value;
+                startDate.value = formatToYYYYMMDD(cloudState.startDate);
+                cnyExchangeRate.value = cloudState.cnyExchangeRate || cnyExchangeRate.value;
+              }
+              lastUpdated.value = Date.now();
+            }
+
+            // C. 本機同步快取，並清除同步成功的刪除標記
+            isSyncing.value = true;
+            const payload = getPayloadToSync(events.value);
+            localStorage.setItem("sh_planner_pro_v3", JSON.stringify({
+              ...payload,
+              deletedItemIds: [] 
+            }));
+            deletedItemIds.value = []; // 清空已被合併之刪除標籤
+            isSyncing.value = false;
+
+            // D. 正式發送寫入雲端
             await fetch(appsScriptUrl.value, {
               method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
             });
-            triggerToast("雲端同步要求已發送 (請至 Google 試算表確認更新)", "success");
+            triggerToast("✨ 雙向雲端同步與智慧合併完成！", "success");
+            
+            nextTick(() => {
+              initLeafletMap();
+            });
           } catch (e) {
-            triggerToast("雲端同步連線失敗", "error");
+            triggerToast("雲端合併同步連線失敗，已儲存至本機", "error");
           } finally {
             gasLoading.value = false;
           }
@@ -2408,10 +2538,11 @@
               cnyExchangeRate.value = data.cnyExchangeRate || 4.55;
               bills.value = data.bills || []; 
               lastUpdated.value = data.lastUpdated || Date.now();
+              deletedItemIds.value = data.deletedItemIds || [];
               
               initializeBillsTwd();
               saveToLocalStorage();
-              triggerToast("成功讀取雲端試算表並還原本機設定！", "success");
+              triggerToast("成功自雲端還原並更新進度！", "success");
               nextTick(() => {
                 isSyncing.value = false;
                 initLeafletMap();
@@ -2426,10 +2557,45 @@
           }
         };
 
+        // 背景靜默自動雙向合併同步
         const backgroundSyncToGas = async () => {
           if (!appsScriptUrl.value) return;
           try {
-            const payload = getPayloadToSync();
+            let cloudState = null;
+            try {
+              const response = await fetch(`${appsScriptUrl.value}?action=load`);
+              if (response.ok) {
+                const resJson = await response.json();
+                if (resJson && resJson.tripTitle) {
+                  cloudState = resJson;
+                }
+              }
+            } catch (e) {}
+
+            if (cloudState) {
+              isSyncing.value = true;
+              events.value = mergeList(events.value, cloudState.events || []);
+              bills.value = mergeList(bills.value, cloudState.bills || []);
+              todos.value = mergeList(todos.value, cloudState.todos || []);
+              shoppingList.value = mergeList(shoppingList.value, cloudState.shoppingList || []);
+              
+              if ((cloudState.lastUpdated || 0) > lastUpdated.value) {
+                tripTitle.value = cloudState.tripTitle || tripTitle.value;
+                daysCount.value = cloudState.daysCount || daysCount.value;
+                startDate.value = formatToYYYYMMDD(cloudState.startDate);
+                cnyExchangeRate.value = cloudState.cnyExchangeRate || cnyExchangeRate.value;
+              }
+              lastUpdated.value = Date.now();
+              isSyncing.value = false;
+            }
+
+            const payload = getPayloadToSync(events.value);
+            localStorage.setItem("sh_planner_pro_v3", JSON.stringify({
+              ...payload,
+              deletedItemIds: [] 
+            }));
+            deletedItemIds.value = [];
+
             await fetch(appsScriptUrl.value, {
               method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
             });
@@ -2469,7 +2635,6 @@
             const resultText = await callGeminiWithBackoff(prompt, systemPrompt, true);
             
             let cleanText = resultText.trim();
-            // 超強健 JSON 區塊正則提取，過濾 markdown 包裝膜
             const jsonBlockRegex = /\{[\s\S]*\}/;
             const match = cleanText.match(jsonBlockRegex);
             if (match) {
@@ -2492,7 +2657,8 @@
                   suggestedNotes: ev.suggestedNotes || "",
                   lat: ev.lat || 34.2658,
                   lng: ev.lng || 108.9541,
-                  photo: ""
+                  photo: "",
+                  updatedAt: Date.now()
                 });
               });
               triggerToast("✨ Gemini AI 線上分析與智慧排程成功！", "success");
@@ -2508,7 +2674,6 @@
             }
           } catch (e) {
             console.error(e);
-            // 當連線出錯或無 key 時退回到高性能本地語意解析器
             const fallbackText = smartLocalSemanticParser(aiInput.value, true);
             try {
               const parsed = JSON.parse(fallbackText);
@@ -2526,7 +2691,8 @@
                     suggestedNotes: ev.suggestedNotes || "",
                     lat: ev.lat || 34.2658,
                     lng: ev.lng || 108.9541,
-                    photo: ""
+                    photo: "",
+                    updatedAt: Date.now()
                   });
                 });
                 triggerToast("✨ 已啟用本地智慧語意解析引擎排程成功！", "success");
@@ -2552,16 +2718,15 @@
           checkUrlForSharedData();
           checkAndAutoRouteDay();
           
-          // 🚀 智慧自適應同步還原機制（一律從雲端讀取進度不管新舊）
+          // 雙向同步初始化
           if (appsScriptUrl.value && appsScriptUrl.value.trim() !== "") {
-            triggerToast("🔄 正在連線雲端進行強制同步...", "info");
+            triggerToast("🔄 正在雙向同步雲端最新手帳進度...", "info");
             try {
-              // 一律從雲端拉取進度覆蓋本機
-              backupLocalStateBeforeOverwrite(); // 備份本地，防止誤覆蓋
+              backupLocalStateBeforeOverwrite(); 
               await loadFromGoogleSheet();
             } catch (e) {
-              console.warn("Auto sync failed, fallback to local storage:", e);
-              triggerToast("🌐 目前處於離線狀態或雲端連線失敗，已載入本地最新進度。", "info");
+              console.warn("雲端自動同步失敗，將以本地為準:", e);
+              triggerToast("🌐 目前處於離線狀態或雲端連接失敗，已載入本地最新進度。", "info");
             }
           }
 
@@ -2572,7 +2737,7 @@
           });
         });
 
-        // Watchers
+        // 監聽天數切換
         watch(activeDay, (newVal) => {
           if (newVal === 'todo') {
             return;
@@ -2600,12 +2765,12 @@
           { deep: true }
         );
 
+        // 欄位即時監聽與自動防震儲存
         watch(
-          [tripTitle, todos, shoppingList, events, bills, startDate],
+          [startDate],
           () => {
             saveToLocalStorage();
-          },
-          { deep: true }
+          }
         );
 
         return {
@@ -2636,6 +2801,8 @@
           deletedEvent,
           triggerToast,
           saveToLocalStorage,
+          debouncedSave,
+          debouncedSaveEvent,
           generateShareLink,
           dailyEvents,
           filteredBills,
@@ -2650,6 +2817,7 @@
           singleAiLoading, 
           fetchSingleEventAISuggestion, 
           addTodo,
+          toggleTodo,
           deleteTodo,
           addNewDay,
           deleteLastDay,
@@ -2663,12 +2831,14 @@
           saveTimeEdit,
           insertSpreadsheetRow,
           removeBillRow,
+          saveBillAndSync,
           onTitleInput,
           detectCategory,
           getCategoryBadgeClass,
           getCatColor,
           getPayerClass,
           addShopItem,
+          toggleShopItem,
           deleteShopItem,
           exportData,
           importData,
@@ -2691,7 +2861,8 @@
           renderMemoirPoster,
           lastUpdated,
           isSyncing,
-          localBackup
+          localBackup,
+          deletedItemIds
         };
       }
     }).mount('#app');
