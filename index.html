@@ -75,7 +75,7 @@
 
   <div id="app" class="relative w-full max-w-md bg-jp-cream min-h-screen flex flex-col shadow-2xl overflow-hidden border border-stone-200/50 journal-grid">
     
-    <!-- 提示通知 (支援復原刪除) -->
+    <!-- 提示通知 (支援一鍵復原本地/一鍵復原刪除) -->
     <transition name="slide-up">
       <div v-if="toast.show" 
            :class="[
@@ -673,9 +673,9 @@
       <!-- 回記相冊 (Memoir Album Tab - 實體手記航線時光軸) -->
       <section v-if="currentTab === 'memoir'" class="space-y-4 fade-in pb-10">
         
-        <!-- 連貫手帳時光足跡軸 (照片與景點並列呈現) -->
+        <!-- 連貫手帳時光足跡軸 (照片與景點並列呈現 - 一次顯示一天) -->
         <div class="space-y-6">
-          <div v-for="day in daysCount" :key="day" class="bg-white rounded-3xl p-5 shadow-sm border border-stone-100/80 space-y-4 relative overflow-hidden bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]">
+          <div v-for="day in [memoirConfig.dayFilter]" :key="day" class="bg-white rounded-3xl p-5 shadow-sm border border-stone-100/80 space-y-4 relative overflow-hidden bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]">
             
             <div class="flex items-center justify-between border-b pb-2 border-stone-100 relative z-10">
               <div class="flex items-center gap-2">
@@ -853,12 +853,12 @@
           </div>
 
           <div>
-            <label class="block font-bold text-stone-500 mb-1">行程名稱 (景點或店家名稱)</label>
+            <label class="block font-bold text-stone-500 mb-1">行程名稱 (景點 or 店家名稱)</label>
             <input v-model="newEvent.title" type="text" placeholder="例：北京故宮午門" class="w-full p-2.5 rounded-xl bg-jp-cream border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium shadow-inner">
           </div>
 
           <div>
-            <label class="block font-bold text-stone-500 mb-1">地址或詳細定位地點 (用於地圖)</label>
+            <label class="block font-bold text-stone-500 mb-1">地址 or 詳細定位地點 (用於地圖)</label>
             <input v-model="newEvent.location" type="text" placeholder="例：北京故宮午門" class="w-full p-2.5 rounded-xl bg-jp-cream border border-stone-200 focus:outline-none focus:ring-1 focus:ring-jp-accent font-medium shadow-inner">
           </div>
           
@@ -975,11 +975,11 @@
           matchedEvent.title = "成都大熊貓繁育研究基地";
           matchedEvent.location = "成都大熊貓繁育研究基地";
           matchedEvent.category = "景點";
-          matchedEvent.suggestedNotes = "務必早上7:30前傾聽熊貓咀嚼聲！大熊貓怕熱，中午過後就會回冷氣房，建議清晨造訪。";
+          matchedEvent.suggestedNotes = "務必早上7:30前抵達園區！大熊貓怕熱，中午過後就會回冷氣房睡覺，去晚了只能看空地。";
           matchedEvent.lat = 30.7388;
           matchedEvent.lng = 104.1432;
         } else if (text.includes("灕江") || text.includes("桂林")) {
-          matchedEvent.title = "景之灕江精緻竹筏漂流";
+          matchedEvent.title = "灕江精緻竹筏漂流";
           matchedEvent.location = "陽朔灕江景區";
           matchedEvent.category = "活動";
           matchedEvent.suggestedNotes = "人在畫中游，欣賞20元人民幣背景實景。漂流建議選擇官方售票處的4人筏。";
@@ -1008,58 +1008,28 @@
 
     createApp({
       setup() {
-        const tripTitle = ref("中國五天極致精華遊");
-        const daysCount = ref(5);
+        const tripTitle = ref("華夏時光足跡手帳");
+        const daysCount = ref(1); // 預設無資料時從 1 天開始
         const activeDay = ref(1);
         const currentTab = ref("itinerary");
-        const startDate = ref("2026-06-17"); // 初始日期強制設定為 6/17
+        const startDate = ref(""); // 初始出發日期為空白
+        const lastUpdated = ref(Date.now()); // 最後修改時間戳記
+        const isSyncing = ref(false); // 同步中之防回圈鎖定器
+        const localBackup = ref(null); // 本地覆蓋防丟失備份
         
         // AI 參數
         const aiInput = ref("");
         const aiLoading = ref(false);
         const singleAiLoading = ref(null);
 
-        const todos = ref([
-          { text: "確認並辦理台胞證期限時效 (確認有效期限)", done: true },
-          { text: "下載高德地圖與支付寶/微信綁定台灣信用卡", done: true },
-          { text: "購買中國大陸上網 SIM卡/eSIM (免翻牆版本)", done: false },
-          { text: "註冊 12306 高鐵搶票微信小程式 / 官網帳號", done: false }
-        ]);
+        // 🗑️ 清除所有本地預設/Mock 資料以保持空白狀態
+        const todos = ref([]);
         const newTodo = ref("");
 
-        const shoppingList = ref([
-          { text: "北京同仁堂草本周邊商品", done: false, budget: "120" },
-          { text: "兵馬俑仿古精緻手伴擺件", done: true, budget: "85" },
-          { text: "成都蜀錦刺繡大熊貓玩偶", done: false, budget: "150" },
-          { text: "桂林三花酒 / 桂花糕特產", done: false, budget: "60" }
-        ]);
+        const shoppingList = ref([]);
         const newShopItem = ref({ text: "", budget: "" });
 
-        const events = ref([
-          // Day 1: Beijing
-          { id: "e1", day: 1, time: "09:30", title: "抵達北京首都機場", location: "北京首都國際機場", category: "交通", note: "搭乘機場快軌線快速進入市區。", suggestedNotes: "推薦直接在微信或支付寶購買北京互通卡，刷手機搭地鐵極度方便！", lat: 40.0799, lng: 116.6031, photo: "" },
-          { id: "e2", day: 1, time: "11:30", title: "北京皇家四合院酒店 check-in", location: "北京故宮皇家驛棧", category: "住宿", note: "傳統京味四合院體驗，放行李。", suggestedNotes: "避開胡同塞車，建議出發前聯絡酒店提供最優步行導引。", lat: 39.9205, lng: 116.4035, photo: "" },
-          { id: "e3", day: 1, time: "13:30", title: "故宮博物院探秘", location: "北京故宮午門", category: "景點", note: "穿越歷史，探尋紫禁城深處的文化故事。", suggestedNotes: "故宮必須提早7天在微信小程序實名預約門票！週一閉館，進園自備飲水。", lat: 39.9163, lng: 116.3972, photo: "" },
-          { id: "e4", day: 1, time: "18:00", title: "享用正宗北京烤鴨", location: "四季民福烤鴨店 (故宮店)", category: "餐飲", note: "邊看故宮護城河，邊享用酥脆香嫩的烤鴨。", suggestedNotes: "這家分店排隊極度熱門！下午3點前就必須線上拿號，否則等到深夜。", lat: 39.9180, lng: 116.4042, photo: "" },
-
-          // Day 2: Xi'an
-          { id: "e5", day: 2, time: "08:00", title: "高鐵復興號前行", location: "北京西站", category: "交通", note: "搭乘高鐵前往古都西安，大約4.5小時。", suggestedNotes: "車上訊號良好，建議提前準備好12306訂餐，高鐵外賣會直接送到座位！", lat: 39.8949, lng: 116.3218, photo: "" },
-          { id: "e6", day: 2, time: "14:00", title: "秦始皇兵馬俑博物館", location: "西安秦始皇兵馬俑", category: "景點", note: "震撼人心的地下世界遺產軍陣。", suggestedNotes: "市區去兵馬俑車程約1小時。門口野生導遊極多，建議租用官方語音導覽器或預約官方講解員。", lat: 34.3842, lng: 109.2785, photo: "" },
-          { id: "e7", day: 2, time: "19:00", title: "鐘鼓樓與回民街夜市", location: "西安鐘樓", category: "餐飲", note: "燈火輝煌的西安夜景，品嚐泡饃與肉夾饃。", suggestedNotes: "回民街主街人滿為患且物價偏高，轉進旁邊的大皮院或灑金橋才能吃到在地老店！", lat: 34.2637, lng: 108.9475, photo: "" },
-
-          // Day 3: Chengdu
-          { id: "e8", day: 3, time: "09:00", title: "大熊貓繁育研究基地", location: "成都大熊貓繁育研究基地", category: "景點", note: "去看超萌的熊貓寶寶和網紅「花花」！", suggestedNotes: "一定要早上7:30前抵達！大熊貓怕熱，中午過後就會回冷氣房睡覺，去晚了只能看空地。", lat: 30.7388, lng: 104.1432, photo: "" },
-          { id: "e9", day: 3, time: "13:00", title: "川味麻辣火鍋午餐", location: "蜀九香火鍋 (九眼橋店)", category: "餐飲", note: "挑戰最正宗的四川九宮格牛油火鍋。", suggestedNotes: "外地旅客建議點「微辣」或「鴛鴦鍋」，記得配上一碗手工冰粉解辣清涼！", lat: 30.6438, lng: 104.0898, photo: "" },
-          { id: "e10", day: 3, time: "16:00", title: "錦里古街與蓋碗茶體驗", location: "成都錦里", category: "活動", note: "在古色古香的街區聽川劇、喝蓋碗茶、掏耳朵。", suggestedNotes: "街邊掏耳朵體驗前請先確認價格，推薦找持證的老師傅。點一杯竹葉青茶，放空一整天。", lat: 30.6482, lng: 104.0495, photo: "" },
-
-          // Day 4: Guilin
-          { id: "e11", day: 4, time: "10:00", title: "灕江竹筏漂流", location: "陽朔灕江景區", category: "景點", note: "人在畫中游，欣賞20元人民幣背景實景。", suggestedNotes: "漂流要選擇官方售票處的4人筏，穿好救生衣。途中兜售拍照的相片可以不買，用自己手機拍更美。", lat: 24.9192, lng: 110.4981, photo: "" },
-          { id: "e12", day: 4, time: "19:00", title: "陽朔西街浪漫散步", location: "陽朔西街", category: "景點", note: "極具異國風情的古街，品嚐灕江啤酒魚。", suggestedNotes: "啤酒魚秤重時一定要盯緊店家去水、去繩，現殺現秤，避免遇到偷換魚肉的情況。", lat: 24.7788, lng: 110.4905, photo: "" },
-
-          // Day 5: Shanghai
-          { id: "e13", day: 5, time: "11:00", title: "抵達魔都上海", location: "上海虹橋國際機場", category: "交通", note: "搭乘地鐵10號線直達市中心南京東路。", suggestedNotes: "虹橋樞紐非常大，高鐵、地鐵、飛機轉乘需要步行較長距離，預留30分鐘轉機時間。", lat: 31.1974, lng: 121.3343, photo: "" },
-          { id: "e14", day: 5, time: "19:00", title: "外灘暮色與浦東璀璨夜景", location: "上海市黃浦區外灘", category: "景點", note: "欣賞萬國建築博覽群與陸家嘴三件套交相輝映。", suggestedNotes: "晚上十點整會準時熄燈，建議九點前抵達。江邊風大，記得攜帶防風外套。", lat: 31.2406, lng: 121.4901, photo: "" }
-        ]);
+        const events = ref([]);
 
         const editingTimeId = ref(null);
         const tempHours = ref("12");
@@ -1088,13 +1058,7 @@
         });
 
         const cnyExchangeRate = ref(4.55);
-        const bills = ref([
-          { id: "b1", title: "京熙高鐵二等座雙人票", category: "交通", payer: "展源", amount: "1080", amountTwd: "4914" },
-          { id: "b2", title: "北京故宮門票(雙人預約)", category: "景點", payer: "恩璩", amount: "120", amountTwd: "546" },
-          { id: "b3", title: "四季民福正宗烤鴨午餐", category: "餐飲", payer: "展源", amount: "380", amountTwd: "1729" },
-          { id: "b4", title: "秦始皇兵馬俑雙人票與講解", category: "景點", payer: "恩璩", amount: "350", amountTwd: "1593" },
-          { id: "b5", title: "成都蜀九香九宮格麻辣火鍋", category: "餐飲", payer: "展源", amount: "280", amountTwd: "1274" }
-        ]);
+        const bills = ref([]); // 清除預設記帳項目
 
         const toast = ref({ show: false, message: "", type: "info" });
         const triggerToast = (msg, type = "info") => {
@@ -1106,19 +1070,10 @@
           }, 4500);
         };
 
-        // 🏆 修正了 Shadows 區域金鑰宣告、API Key Validation 邏輯，並採用 gemini-2.5-flash-preview-09-2025 模型，修正參數拼寫錯誤
         const callGeminiWithBackoff = async (prompt, systemInstruction = "", isJson = false) => {
-          // 🚀 採用正確的預覽環境模型並結合平台注入的 apiKey 變數，移除會導致連線永遠失效的區域 shadowing 'const apiKey = ""'
           const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-          const payload = { 
-            contents: [{ parts: [{ text: prompt }] }] 
-          };
-          
-          // 🚀 修正先前因變數名稱拼寫不一致造成的 ReferenceError 錯誤
-          if (systemInstruction) {
-            payload.systemInstruction = { parts: [{ text: systemInstruction }] };
-          }
-          
+          const payload = { contents: [{ parts: [{ text: prompt }] }] };
+          if (systemInstruction) payload.systemInstruction = { parts: [{ text: systemInstruction }] }; 
           if (isJson) {
             payload.generationConfig = {
               responseMimeType: "application/json",
@@ -1161,8 +1116,9 @@
               return text;
             } catch (error) {
               if (i === 4) {
-                // 向上丟出例外，讓調用端 (parseAI / fetchSingleEventAISuggestion) 的 catch 區塊接手降級 fallback 解析
-                throw error;
+                // 當所有連線重試失敗時，發出主動警告並降級使用本地解析器
+                triggerToast("Gemini AI 服務連線重試失敗，已自動啟用本地智慧語意解析引擎。", "info");
+                return smartLocalSemanticParser(prompt, isJson);
               }
               await new Promise(resolve => setTimeout(resolve, delay));
               delay *= 2;
@@ -1284,8 +1240,27 @@
           }, 1500);
         };
 
+        // 智慧備份本地狀態，防止雲端覆蓋造成損失
+        const backupLocalStateBeforeOverwrite = () => {
+          localBackup.value = {
+            tripTitle: tripTitle.value,
+            daysCount: daysCount.value,
+            startDate: startDate.value,
+            todos: JSON.parse(JSON.stringify(todos.value)),
+            shoppingList: JSON.parse(JSON.stringify(shoppingList.value)),
+            events: JSON.parse(JSON.stringify(events.value)),
+            cnyExchangeRate: cnyExchangeRate.value,
+            bills: JSON.parse(JSON.stringify(bills.value)),
+            lastUpdated: lastUpdated.value
+          };
+          deletedEvent.value = { id: "local_sync_backup", isLocalBackup: true };
+        };
+
+        // 儲存狀態，防回圈與超限檢測機制
         const saveToLocalStorage = () => {
+          if (isSyncing.value) return; 
           try {
+            lastUpdated.value = Date.now();
             const stateToSave = {
               tripTitle: tripTitle.value, 
               daysCount: daysCount.value, 
@@ -1296,7 +1271,8 @@
               cnyExchangeRate: cnyExchangeRate.value, 
               bills: bills.value, 
               appsScriptUrl: appsScriptUrl.value, 
-              autoSyncToGas: autoSyncToGas.value
+              autoSyncToGas: autoSyncToGas.value,
+              lastUpdated: lastUpdated.value
             };
             localStorage.setItem("sh_planner_pro_v3", JSON.stringify(stateToSave));
             debouncedSyncToGas();
@@ -1323,6 +1299,7 @@
               if (parsed.bills) bills.value = parsed.bills;
               if (parsed.appsScriptUrl) appsScriptUrl.value = parsed.appsScriptUrl;
               if (parsed.autoSyncToGas !== undefined) autoSyncToGas.value = parsed.autoSyncToGas;
+              if (parsed.lastUpdated) lastUpdated.value = parsed.lastUpdated;
             } catch (e) {
               console.error("Local storage error", e);
             }
@@ -2052,6 +2029,30 @@
 
         const undoDelete = () => {
           if (deletedEvent.value) {
+            // 雲端覆蓋防丟失復原邏輯
+            if (deletedEvent.value.isLocalBackup && localBackup.value) {
+              isSyncing.value = true;
+              tripTitle.value = localBackup.value.tripTitle;
+              daysCount.value = localBackup.value.daysCount;
+              startDate.value = localBackup.value.startDate;
+              todos.value = localBackup.value.todos;
+              shoppingList.value = localBackup.value.shoppingList;
+              events.value = localBackup.value.events;
+              cnyExchangeRate.value = localBackup.value.cnyExchangeRate;
+              bills.value = localBackup.value.bills;
+              lastUpdated.value = localBackup.value.lastUpdated;
+              
+              saveToLocalStorage();
+              triggerToast("已恢復您的本地最新進度，並將同步至雲端！", "success");
+              deletedEvent.value = null;
+              localBackup.value = null;
+              nextTick(() => {
+                isSyncing.value = false;
+                initLeafletMap();
+              });
+              return;
+            }
+
             if (deletedEvent.value.isDayCheckpoint) {
               daysCount.value = deletedEvent.value.originalDayCount;
               if (backupDeletedDayEvents.value.length > 0) {
@@ -2313,7 +2314,7 @@
           const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(stateToSave, null, 2));
           const dlAnchorElem = document.createElement('a');
           dlAnchorElem.setAttribute("href", dataStr);
-          dlAnchorElem.setAttribute("download", `${tripTitle.value}_中國精華規劃.json`);
+          dlAnchorElem.setAttribute("download", `${tripTitle.value}_上海規劃.json`);
           dlAnchorElem.click();
           triggerToast("備份 JSON 導出成功！", "success");
         };
@@ -2327,7 +2328,7 @@
               const parsed = JSON.parse(e.target.result);
               if (parsed.tripTitle) tripTitle.value = parsed.tripTitle;
               if (parsed.daysCount) daysCount.value = parsed.daysCount;
-              if (parsed.startDate) startDate.value = formatToYYYYMMDD(parsed.startDate); // 相容轉換
+              if (parsed.startDate) startDate.value = parsed.startDate;
               if (parsed.todos) todos.value = parsed.todos;
               if (parsed.shoppingList) shoppingList.value = parsed.shoppingList;
               if (parsed.events) events.value = parsed.events;
@@ -2349,9 +2350,7 @@
 
         // 🏆 封裝最安全的上傳資料包 (防溢字元檢測機制)
         const getPayloadToSync = () => {
-          // 深度複製，避免影響本地已有相片的狀態
           const cleanedEvents = events.value.map(e => ({ ...e }));
-          
           const payload = {
             action: "save", 
             tripTitle: tripTitle.value, 
@@ -2361,13 +2360,13 @@
             shoppingList: shoppingList.value, 
             events: cleanedEvents, 
             cnyExchangeRate: cnyExchangeRate.value, 
-            bills: bills.value
+            bills: bills.value,
+            lastUpdated: lastUpdated.value
           };
 
           // 檢測 JSON 總長度是否即將超越試算表單一單元格 50,000 字元上限
           let jsonStr = JSON.stringify(payload);
           if (jsonStr.length > 46000) {
-            // 🚨 超限時，自動清空備份中的 Base64 相片，優先保全「日期、行程與記帳」不崩潰
             cleanedEvents.forEach(e => { e.photo = ""; });
             payload.events = cleanedEvents;
             triggerToast("⚠️ 偵測到相片數據量過大！已自動在雲端備份中略過相片，全力保全文字及記帳安全儲存。", "info");
@@ -2399,6 +2398,7 @@
             const response = await fetch(urlWithParams);
             const data = await response.json();
             if (data && data.tripTitle) {
+              isSyncing.value = true;
               tripTitle.value = data.tripTitle;
               daysCount.value = data.daysCount;
               startDate.value = formatToYYYYMMDD(data.startDate); 
@@ -2407,11 +2407,13 @@
               events.value = data.events || [];
               cnyExchangeRate.value = data.cnyExchangeRate || 4.55;
               bills.value = data.bills || []; 
+              lastUpdated.value = data.lastUpdated || Date.now();
               
               initializeBillsTwd();
               saveToLocalStorage();
               triggerToast("成功讀取雲端試算表並還原本機設定！", "success");
               nextTick(() => {
+                isSyncing.value = false;
                 initLeafletMap();
               });
             } else {
@@ -2464,8 +2466,6 @@
             - 請寫一段在該景點遊玩時最刁鑽最實用的【50字以內極致避雷與防坑指南】suggestedNotes。`;
             
             const prompt = `分析這段旅程，規劃加入為 Day ${activeDay.value === 'todo' ? 1 : activeDay.value} 行程中: "${aiInput.value}"`;
-            
-            // 🚀 正確發送網絡請求（已確保全球變數金鑰未被區域變數 shadowing 遮蔽）
             const resultText = await callGeminiWithBackoff(prompt, systemPrompt, true);
             
             let cleanText = resultText.trim();
@@ -2552,13 +2552,16 @@
           checkUrlForSharedData();
           checkAndAutoRouteDay();
           
+          // 🚀 智慧自適應同步還原機制（一律從雲端讀取進度不管新舊）
           if (appsScriptUrl.value && appsScriptUrl.value.trim() !== "") {
-            const hasLocalEvents = events.value && events.value.length > 0;
-            if (!hasLocalEvents) {
-              triggerToast("本機尚無行程，正在自動由雲端試算表還原...", "info");
+            triggerToast("🔄 正在連線雲端進行強制同步...", "info");
+            try {
+              // 一律從雲端拉取進度覆蓋本機
+              backupLocalStateBeforeOverwrite(); // 備份本地，防止誤覆蓋
               await loadFromGoogleSheet();
-            } else {
-              triggerToast("📅 已載入本機最新進度。您可隨時手動上傳或同步！", "success");
+            } catch (e) {
+              console.warn("Auto sync failed, fallback to local storage:", e);
+              triggerToast("🌐 目前處於離線狀態或雲端連線失敗，已載入本地最新進度。", "info");
             }
           }
 
@@ -2685,7 +2688,10 @@
           setMemoirTemplate,
           setMemoirDateStyle,
           downloadMemoirPoster,
-          renderMemoirPoster
+          renderMemoirPoster,
+          lastUpdated,
+          isSyncing,
+          localBackup
         };
       }
     }).mount('#app');
